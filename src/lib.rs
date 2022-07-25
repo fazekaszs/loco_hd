@@ -1,3 +1,6 @@
+mod weight_functions;
+
+use weight_functions::WeightFunction;
 use pyo3::prelude::*;
 
 fn hellinger_dist(counts_a: &Vec<usize>, counts_b: &Vec<usize>) -> f64 {
@@ -22,65 +25,36 @@ fn hellinger_dist(counts_a: &Vec<usize>, counts_b: &Vec<usize>) -> f64 {
     distance
 }
 
-fn w_integral(x: Option<f64>, w_params_a: &Vec<f64>, w_params_b: &Vec<f64>) -> f64 {
-
-    // Calculates 1 - SUM_i(A_i * exp(-B_i * x)) / SUM_i(A_i)
-    // which is the CDF of the hyperexponential distribution.
-
-    if x == None {
-        return 1.0;
-    }
-    let x = x.unwrap();
-
-    let mut norm = 0.;
-    let mut sum = 0.;
-
-    for (&item_a, &item_b) in w_params_a.iter().zip(w_params_b.iter()) {
-        sum += item_a * (- item_b * x).exp();
-        norm += item_a;
-    }
-
-    1. - sum / norm
-}
-
 #[pyclass]
 struct LoCoHD {
+    #[pyo3(get, set)]
     categories: Vec<String>,
-    w_params_a: Vec<f64>,
-    w_params_b: Vec<f64>
+    integrator: WeightFunction
 }
 
 #[pymethods]
 impl LoCoHD {
 
     #[new]
-    fn new(categories: Vec<String>, w_params_a: Vec<f64>, w_params_b: Vec<f64>) -> Self {
-
-        assert_eq!(w_params_a.len(), w_params_b.len(), 
-            "An equal number of weight parameters must be given!"
-        );
-
-        Self { categories, w_params_a, w_params_b }
+    fn __new__(categories: Vec<String>, integrator: (String, Vec<f64>)) -> Self {
+        Self { 
+            categories: categories, 
+            integrator: WeightFunction::new(integrator.0, integrator.1) 
+        }
     }
 
-    #[getter]
-    fn get_categories(&self) -> Vec<String> {
-        self.categories.clone()
-    }
-
-    #[setter]
-    fn set_categories(&mut self, categories: Vec<String>) {
-        self.categories = categories
-    }
-
-    fn hellinger_integral(self_: PyRef<'_, Self>, resi_a: Vec<String>, resi_b: Vec<String>, dists_a: Vec<f64>, dists_b: Vec<f64>) -> f64 {
+    /// hellinger_integral(seq_a, seq_b, dists_a, dists_b, /)
+    /// --
+    /// 
+    /// Calculates the hellinger integral between two environments belonging to two anchor points.
+    fn hellinger_integral(&self, seq_a: Vec<String>, seq_b: Vec<String>, dists_a: Vec<f64>, dists_b: Vec<f64>) -> f64 {
 
         // Check input validity.
-        assert_eq!(resi_a.len(), dists_a.len(),
-            "Lists resi_a and dists_a must have equal lengths!"
+        assert_eq!(seq_a.len(), dists_a.len(),
+            "Lists seq_a and dists_a must have equal lengths!"
         );
-        assert_eq!(resi_b.len(), dists_b.len(),
-            "Lists resi_b and dists_b must have equal lengths!"
+        assert_eq!(seq_b.len(), dists_b.len(),
+            "Lists seq_b and dists_b must have equal lengths!"
         );
         assert_eq!(dists_a[0], 0f64,
             "The dists_a list must start with a distance of 0!"
@@ -91,21 +65,21 @@ impl LoCoHD {
 
         // Define the find_cat_idx function, which returns the index of the given
         // category (from now on: CAT) in the categories vector.
-        let find_cat_idx = |cat: &String| self_.categories.iter().position(|x| *x == *cat).unwrap();
+        let find_cat_idx = |cat: &String| self.categories.iter().position(|x| *x == *cat).unwrap();
 
-        // Define the delta weight function.
+        // Define the delta integrated weight function.
         let delta_w = |x_to: Option<f64>, x_from: Option<f64>| {
-            w_integral(x_to, &self_.w_params_a, &self_.w_params_b) - w_integral(x_from, &self_.w_params_a, &self_.w_params_b)
+            self.integrator.integral(x_to) - self.integrator.integral(x_from)
         };
 
         // Create the probability mass functions (PMFs) and add the first CAT-observations
-        // to them (the first element from resi_a and resi_b).
-        let mut counts_a: Vec<usize> = vec![0; self_.categories.len()];
-        let resi_idx_a: usize = find_cat_idx(&resi_a[0]);
+        // to them (the first element from seq_a and seq_b).
+        let mut counts_a: Vec<usize> = vec![0; self.categories.len()];
+        let resi_idx_a: usize = find_cat_idx(&seq_a[0]);
         counts_a[resi_idx_a] += 1;
 
-        let mut counts_b: Vec<usize> = vec![0; self_.categories.len()];
-        let resi_idx_b: usize = find_cat_idx(&resi_b[0]);
+        let mut counts_b: Vec<usize> = vec![0; self.categories.len()];
+        let resi_idx_b: usize = find_cat_idx(&seq_b[0]);
         counts_b[resi_idx_b] += 1;
 
         // Initialize the parallel indices, the hellinger integral, and a buffer for the previous distance. 
@@ -115,7 +89,7 @@ impl LoCoHD {
         let mut dist_buffer: f64 = 0.0;
 
         // Main loop. This collates (like in merge sort) the distances, while calculating the hellinger integral.
-        while idx_a < resi_a.len() - 1 && idx_b < resi_b.len() - 1 {
+        while idx_a < seq_a.len() - 1 && idx_b < seq_b.len() - 1 {
 
             // Calculate Hellinger distance.            
             let current_hdist = hellinger_dist(&counts_a, &counts_b);
@@ -126,7 +100,7 @@ impl LoCoHD {
 
                 idx_a += 1;
 
-                let resi_idx_a: usize = find_cat_idx(&resi_a[idx_a]);
+                let resi_idx_a: usize = find_cat_idx(&seq_a[idx_a]);
                 counts_a[resi_idx_a] += 1;
 
                 dists_a[idx_a]
@@ -135,7 +109,7 @@ impl LoCoHD {
 
                 idx_b += 1;
 
-                let resi_idx_b: usize = find_cat_idx(&resi_b[idx_b]);
+                let resi_idx_b: usize = find_cat_idx(&seq_b[idx_b]);
                 counts_b[resi_idx_b] += 1;
 
                 dists_b[idx_b]
@@ -145,10 +119,10 @@ impl LoCoHD {
                 idx_a += 1;
                 idx_b += 1;
 
-                let resi_idx_a: usize = find_cat_idx(&resi_a[idx_a]);
+                let resi_idx_a: usize = find_cat_idx(&seq_a[idx_a]);
                 counts_a[resi_idx_a] += 1;
 
-                let resi_idx_b: usize = find_cat_idx(&resi_b[idx_b]);
+                let resi_idx_b: usize = find_cat_idx(&seq_b[idx_b]);
                 counts_b[resi_idx_b] += 1;
 
                 dists_a[idx_a]
@@ -160,7 +134,7 @@ impl LoCoHD {
         }
 
         // Finalizing loops. This happens if one of the lists is finished before the other.
-        if idx_b < resi_b.len() - 1 {
+        if idx_b < seq_b.len() - 1 {
 
             // In this case, the dists_a list is surely finished (see prev. while loop condition), but
             // the dists_b list is not.
@@ -168,18 +142,18 @@ impl LoCoHD {
             let current_hdist = hellinger_dist(&counts_a, &counts_b);
             h_integral += delta_w(Some(dists_b[idx_b]), Some(dists_a[dists_a.len() - 1])) * current_hdist;
 
-            let resi_idx_b: usize = find_cat_idx(&resi_b[idx_b]);
+            let resi_idx_b: usize = find_cat_idx(&seq_b[idx_b]);
             counts_b[resi_idx_b] += 1;
 
             // Finishing the dists_b list.
-            while idx_b < resi_b.len() - 1 {
+            while idx_b < seq_b.len() - 1 {
 
                 idx_b += 1;
 
                 let current_hdist = hellinger_dist(&counts_a, &counts_b);
                 h_integral += delta_w(Some(dists_b[idx_b]), Some(dists_b[idx_b - 1])) * current_hdist;
 
-                let resi_idx_b: usize = find_cat_idx(&resi_b[idx_b]);
+                let resi_idx_b: usize = find_cat_idx(&seq_b[idx_b]);
                 counts_b[resi_idx_b] += 1;
 
             }
@@ -188,25 +162,25 @@ impl LoCoHD {
             let current_hdist = hellinger_dist(&counts_a, &counts_b);
             h_integral += delta_w(None, Some(dists_b[dists_b.len() - 1])) * current_hdist;
 
-        } else if idx_a < resi_a.len() - 1 {
+        } else if idx_a < seq_a.len() - 1 {
 
             // In this case, the dists_b list is finished, but dists_a is not.
             idx_a += 1;
             let current_hdist = hellinger_dist(&counts_a, &counts_b);
             h_integral += delta_w(Some(dists_a[idx_a]), Some(dists_b[dists_b.len() - 1])) * current_hdist;
 
-            let resi_idx_a: usize = find_cat_idx(&resi_a[idx_a]);
+            let resi_idx_a: usize = find_cat_idx(&seq_a[idx_a]);
             counts_a[resi_idx_a] += 1;
 
             // Finishing the dists_a list.
-            while idx_a < resi_a.len() - 1 {
+            while idx_a < seq_a.len() - 1 {
 
                 idx_a += 1;
 
                 let current_hdist = hellinger_dist(&counts_a, &counts_b);
                 h_integral += delta_w(Some(dists_a[idx_a]), Some(dists_a[idx_a - 1])) * current_hdist;
 
-                let resi_idx_a: usize = find_cat_idx(&resi_a[idx_a]);
+                let resi_idx_a: usize = find_cat_idx(&seq_a[idx_a]);
                 counts_a[resi_idx_a] += 1;
 
             }
@@ -215,7 +189,7 @@ impl LoCoHD {
             let current_hdist = hellinger_dist(&counts_a, &counts_b);
             h_integral += delta_w(None, Some(dists_a[dists_a.len() - 1])) * current_hdist;
 
-        } else if idx_a == resi_a.len() - 1 && idx_b == resi_b.len() - 1 {
+        } else if idx_a == seq_a.len() - 1 && idx_b == seq_b.len() - 1 {
 
             // Last integral until infinity.
             // In this case, dists_a[dists_a.len() - 1] == dists_b[dists_b.len() - 1]
@@ -225,6 +199,48 @@ impl LoCoHD {
         } else { unimplemented!(); }
 
         h_integral
+    }
+
+    /// compare_structures(seq_a, seq_b, dmx_a, dmx_b, /)
+    /// --
+    /// 
+    /// Compares two structures with a given sequence pair of categories (seq_a and seq_b) 
+    /// and a given distance matrix pair (dmx_a and dmx_b). 
+    fn compare_structures(&self, seq_a: Vec<String>, seq_b: Vec<String>, dmx_a: Vec<Vec<f64>>, dmx_b: Vec<Vec<f64>>) -> Vec<f64> {
+
+        // Check input validity.
+        assert_eq!(dmx_a.len(), dmx_b.len(),
+            "Only structures with the same size are comparable!"
+        );
+
+        // Define the parallel_sort function, which co-sorts a distance matrix line with a list of categories.
+        let parallel_sort = |dmx_line: &Vec<f64>, cat: &Vec<String>| {
+
+            let mut mask = (0..dmx_line.len()).collect::<Vec<usize>>();
+            mask.sort_by(|&idx1, &idx2| dmx_line[idx1].partial_cmp(&dmx_line[idx2]).unwrap());
+
+            let mut new_dmx_line = vec![];
+            let mut new_cat = vec![];
+
+            for &idx in mask.iter() {
+                new_dmx_line.push(dmx_line[idx]);
+                new_cat.push(cat[idx].clone());
+            }
+
+            (new_dmx_line, new_cat)
+        };
+
+        // Create the line-by-line comparison of the two distance matrices.
+        let mut output = vec![];
+
+        for idx in 0..dmx_a.len() {
+
+            let (new_dmx_line_a, new_seq_a) = parallel_sort(&dmx_a[idx], &seq_a);
+            let (new_dmx_line_b, new_seq_b) = parallel_sort(&dmx_b[idx], &seq_b);
+            output.push(self.hellinger_integral(new_seq_a, new_seq_b, new_dmx_line_a, new_dmx_line_b));
+        }
+
+        output
     }
 
 }
