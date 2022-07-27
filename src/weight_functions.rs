@@ -40,7 +40,7 @@ impl WeightFunction {
                     "For function \"{}\" the first parameter must be smaller than the second!", function_name);
             },
 
-            "kumarasawamy" => {
+            "kumaraswamy" => {
                 length_assert(4);
                 assert!(parameters[0] >= 0., 
                     "For function \"{}\" the first parameter mut be non-negative!", function_name);
@@ -61,7 +61,7 @@ impl WeightFunction {
             "hyper_exp" => self.hyper_exp(x),
             "dagum" => self.dagum(x),
             "uniform" => self.uniform(x),
-            "kumarasawamy" => self.kumarasawamy(x),
+            "kumaraswamy" => self.kumaraswamy(x),
             other => panic!("Unable to identify function {}!", other)
         }
     }
@@ -141,7 +141,7 @@ impl WeightFunction {
     /// - 0, if x < x_min
     /// - y = (x - x_min) / (x_max - x_min), if x_min <= x <= x_max, and then 1 - (1 - y^A)^B
     /// - 1.0, if x > x_max.
-    fn kumarasawamy(&self, x: Option<f64>) -> f64 {
+    fn kumaraswamy(&self, x: Option<f64>) -> f64 {
 
         if x == None {
             return 1.0;
