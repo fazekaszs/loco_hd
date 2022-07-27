@@ -43,11 +43,25 @@ impl LoCoHD {
         }
     }
 
-    /// hellinger_integral(seq_a, seq_b, dists_a, dists_b, /)
+    /// test_integrator(x, /)
+    /// --
+    /// 
+    /// Tests the integrated weight function on a list of values x. Returns the integrated
+    /// value from 0 to x.
+    fn test_integrator(&self, x: Vec<f64>) -> Vec<f64> {
+        let mut output = vec![];
+        for item in x {
+            assert!(item >= 0., "All tested values must be greater than or equal to 0! Value {} violated this!", item);
+            output.push(self.integrator.integral(Some(item)));
+        }
+        output
+    }
+
+    /// from_anchors(seq_a, seq_b, dists_a, dists_b, /)
     /// --
     /// 
     /// Calculates the hellinger integral between two environments belonging to two anchor points.
-    fn hellinger_integral(&self, seq_a: Vec<String>, seq_b: Vec<String>, dists_a: Vec<f64>, dists_b: Vec<f64>) -> f64 {
+    fn from_anchors(&self, seq_a: Vec<String>, seq_b: Vec<String>, dists_a: Vec<f64>, dists_b: Vec<f64>) -> f64 {
 
         // Check input validity.
         assert_eq!(seq_a.len(), dists_a.len(),
@@ -201,12 +215,12 @@ impl LoCoHD {
         h_integral
     }
 
-    /// compare_structures(seq_a, seq_b, dmx_a, dmx_b, /)
+    /// from_dmxs(seq_a, seq_b, dmx_a, dmx_b, /)
     /// --
     /// 
     /// Compares two structures with a given sequence pair of categories (seq_a and seq_b) 
     /// and a given distance matrix pair (dmx_a and dmx_b). 
-    fn compare_structures(&self, seq_a: Vec<String>, seq_b: Vec<String>, dmx_a: Vec<Vec<f64>>, dmx_b: Vec<Vec<f64>>) -> Vec<f64> {
+    fn from_dmxs(&self, seq_a: Vec<String>, seq_b: Vec<String>, dmx_a: Vec<Vec<f64>>, dmx_b: Vec<Vec<f64>>) -> Vec<f64> {
 
         // Check input validity.
         assert_eq!(dmx_a.len(), dmx_b.len(),
@@ -237,12 +251,49 @@ impl LoCoHD {
 
             let (new_dmx_line_a, new_seq_a) = parallel_sort(&dmx_a[idx], &seq_a);
             let (new_dmx_line_b, new_seq_b) = parallel_sort(&dmx_b[idx], &seq_b);
-            output.push(self.hellinger_integral(new_seq_a, new_seq_b, new_dmx_line_a, new_dmx_line_b));
+            output.push(self.from_anchors(new_seq_a, new_seq_b, new_dmx_line_a, new_dmx_line_b));
         }
 
         output
     }
 
+    /// from_coords(seq_a, seq_b, coords_a, coords_b, /)
+    /// --
+    /// 
+    /// Compares two structures with a given sequence pair of categories (coords_a and coords_b) 
+    /// and a given coordinate-set pair (dmx_a and dmx_b). It calculates the distance matrices
+    /// with the p2 (Euclidean) metric.
+    fn from_coords(&self, seq_a: Vec<String>, seq_b: Vec<String>, coords_a: Vec<Vec<f64>>, coords_b: Vec<Vec<f64>>) -> Vec<f64> {
+
+        let calculate_distance = |vec_a: &Vec<f64>, vec_b: &Vec<f64>| {
+
+            assert_eq!(vec_a.len(), vec_b.len(), 
+                "vec_a and vec_b must have same dimensions, but got instead {} and {}!", vec_a.len(), vec_b.len());
+            
+            let mut distance = 0.;
+            for (&item_a, &item_b) in vec_a.iter().zip(vec_b) {
+                distance += (item_a - item_b).powf(2.);
+            }
+            distance.powf(0.5)
+        };
+
+        let calculate_dmx = |coords: &Vec<Vec<f64>>| {
+
+            let mut distance_mx = vec![vec![0.; coords.len()]; coords.len()];
+            
+            for idx1 in 0..coords.len() {
+                for idx2 in idx1 + 1..coords.len() {
+                    let distance = calculate_distance(&coords[idx1], &coords[idx2]);
+                    distance_mx[idx1][idx2] = distance;
+                    distance_mx[idx2][idx1] = distance;
+                }
+            }
+            distance_mx
+        };
+
+        self.from_dmxs(seq_a, seq_b, calculate_dmx(&coords_a), calculate_dmx(&coords_b))
+
+    }
 }
 
 #[pymodule]
