@@ -1,7 +1,33 @@
 mod weight_functions;
 
+use std::collections::HashMap;
+
 use weight_functions::WeightFunction;
 use pyo3::prelude::*;
+
+#[pyclass]
+#[derive(Clone)]
+struct PrimitiveAtom {
+
+    #[pyo3(get, set)]
+    primitive_type: String,
+
+    #[pyo3(get, set)]
+    id: String,
+
+    #[pyo3(get, set)]
+    coordinates: Vec<f64>
+}
+
+#[pymethods]
+impl PrimitiveAtom {
+
+    #[new]
+    fn __new__(primitive_type: String, id: String, coordinates: Vec<f64>) -> Self {
+        Self { primitive_type, id, coordinates }
+    }
+}
+
 
 fn hellinger_dist(counts_a: &Vec<usize>, counts_b: &Vec<usize>) -> f64 {
     let mut norm_a: usize = 0;
@@ -23,6 +49,36 @@ fn hellinger_dist(counts_a: &Vec<usize>, counts_b: &Vec<usize>) -> f64 {
     distance = (distance / 2f64).sqrt();
 
     distance
+}
+
+fn euclidean_distance(vec_a: &Vec<f64>, vec_b: &Vec<f64>) -> f64 {
+
+    assert_eq!(vec_a.len(), vec_b.len(), 
+        "vec_a and vec_b must have same dimensions, but got instead {} and {}!", vec_a.len(), vec_b.len());
+            
+    let mut distance = 0.;
+    for (&item_a, &item_b) in vec_a.iter().zip(vec_b) {
+        distance += (item_a - item_b).powf(2.);
+    }
+    distance.powf(0.5)
+}
+
+// Define the parallel_sort function, which co-sorts a distance matrix line with a list of categories.
+fn parallel_sort(dists: &Vec<f64>, cats: &Vec<String>) -> (Vec<f64>, Vec<String>) {
+
+    let mut mask = (0..dists.len()).collect::<Vec<usize>>();
+    mask.sort_by(|&idx1, &idx2| dists[idx1].partial_cmp(&dists[idx2]).unwrap());
+
+    let mut new_dmx_line = vec![];
+    let mut new_cat = vec![];
+
+    for &idx in mask.iter() {
+        new_dmx_line.push(dists[idx]);
+        new_cat.push(cats[idx].clone());
+    }
+
+    (new_dmx_line, new_cat)
+    
 }
 
 #[pyclass]
@@ -227,23 +283,6 @@ impl LoCoHD {
             "Only structures with the same size are comparable!"
         );
 
-        // Define the parallel_sort function, which co-sorts a distance matrix line with a list of categories.
-        let parallel_sort = |dmx_line: &Vec<f64>, cat: &Vec<String>| {
-
-            let mut mask = (0..dmx_line.len()).collect::<Vec<usize>>();
-            mask.sort_by(|&idx1, &idx2| dmx_line[idx1].partial_cmp(&dmx_line[idx2]).unwrap());
-
-            let mut new_dmx_line = vec![];
-            let mut new_cat = vec![];
-
-            for &idx in mask.iter() {
-                new_dmx_line.push(dmx_line[idx]);
-                new_cat.push(cat[idx].clone());
-            }
-
-            (new_dmx_line, new_cat)
-        };
-
         // Create the line-by-line comparison of the two distance matrices.
         let mut output = vec![];
 
@@ -265,25 +304,13 @@ impl LoCoHD {
     /// with the p2 (Euclidean) metric.
     fn from_coords(&self, seq_a: Vec<String>, seq_b: Vec<String>, coords_a: Vec<Vec<f64>>, coords_b: Vec<Vec<f64>>) -> Vec<f64> {
 
-        let calculate_distance = |vec_a: &Vec<f64>, vec_b: &Vec<f64>| {
-
-            assert_eq!(vec_a.len(), vec_b.len(), 
-                "vec_a and vec_b must have same dimensions, but got instead {} and {}!", vec_a.len(), vec_b.len());
-            
-            let mut distance = 0.;
-            for (&item_a, &item_b) in vec_a.iter().zip(vec_b) {
-                distance += (item_a - item_b).powf(2.);
-            }
-            distance.powf(0.5)
-        };
-
         let calculate_dmx = |coords: &Vec<Vec<f64>>| {
 
             let mut distance_mx = vec![vec![0.; coords.len()]; coords.len()];
             
             for idx1 in 0..coords.len() {
                 for idx2 in idx1 + 1..coords.len() {
-                    let distance = calculate_distance(&coords[idx1], &coords[idx2]);
+                    let distance = euclidean_distance(&coords[idx1], &coords[idx2]);
                     distance_mx[idx1][idx2] = distance;
                     distance_mx[idx2][idx1] = distance;
                 }
@@ -294,10 +321,95 @@ impl LoCoHD {
         self.from_dmxs(seq_a, seq_b, calculate_dmx(&coords_a), calculate_dmx(&coords_b))
 
     }
+
+    fn from_primitives(&self, 
+        prim_a: Vec<PrimitiveAtom>, 
+        prim_b: Vec<PrimitiveAtom>, 
+        anchor_pairs: Vec<(usize, usize)>, 
+        only_hetero_contacts: bool) -> Vec<f64> {
+
+        let mut dmx_a: HashMap<(usize, usize), f64> = HashMap::new();
+        let mut dmx_b: HashMap<(usize, usize), f64> = HashMap::new();
+
+        let mut output = vec![];
+        
+        for &(idx_a1, idx_b1) in anchor_pairs.iter() {
+
+            let mut dists_a: Vec<f64> = vec![];
+            let mut seq_a: Vec<String> = vec![];
+
+            for idx_a2 in 0..prim_a.len() {
+
+                if idx_a1 == idx_a2 {
+                    dists_a.push(0.);
+                    seq_a.push(prim_a[idx_a1].primitive_type.clone());
+                    continue;
+                }
+
+                if prim_a[idx_a1].id == prim_a[idx_a2].id && only_hetero_contacts {
+                    continue;
+                }
+
+                let idx_pair = if idx_a1 > idx_a2 { (idx_a2, idx_a1) } else { (idx_a1, idx_a2) };
+
+                match dmx_a.get(&idx_pair) {
+                    Some(&dist) => {
+                        dists_a.push(dist);
+                    },
+                    None => {
+                        let dist = euclidean_distance(&prim_a[idx_a1].coordinates, &prim_a[idx_a2].coordinates);
+                        dists_a.push(dist);
+                        dmx_a.insert(idx_pair, dist);
+                    }
+                }
+                seq_a.push(prim_a[idx_a2].primitive_type.clone());
+            }
+
+            let mut dists_b: Vec<f64> = vec![];
+            let mut seq_b: Vec<String> = vec![];
+
+            for idx_b2 in 0..prim_b.len() {
+
+                if idx_b1 == idx_b2 {
+                    dists_b.push(0.);
+                    seq_b.push(prim_b[idx_b1].primitive_type.clone());
+                    continue;
+                }
+
+                if prim_b[idx_b1].id == prim_b[idx_b2].id && only_hetero_contacts {
+                    continue;
+                }
+
+                let idx_pair = if idx_b1 > idx_b2 { (idx_b2, idx_b1) } else { (idx_b1, idx_b2) };
+
+                match dmx_b.get(&idx_pair) {
+                    Some(&dist) => {
+                        dists_b.push(dist);
+                    },
+                    None => {
+                        let dist = euclidean_distance(&prim_b[idx_b1].coordinates, &prim_b[idx_b2].coordinates);
+                        dists_b.push(dist);
+                        dmx_b.insert(idx_pair, dist);
+                    }
+                }
+                seq_b.push(prim_b[idx_b2].primitive_type.clone());
+            }
+
+            let (dists_a, seq_a) = parallel_sort(&dists_a, &seq_a);
+            let (dists_b, seq_b) = parallel_sort(&dists_b, &seq_b);
+
+            output.push(
+                self.from_anchors(seq_a, seq_b, dists_a, dists_b)
+            );
+        }
+
+        output
+    }
 }
 
 #[pymodule]
 fn loco_hd(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<LoCoHD>()?;
+    m.add_class::<PrimitiveAtom>()?;
     Ok(())
 }

@@ -13,7 +13,7 @@ impl WeightFunction {
         };
 
         match function_name.as_str() {
-            
+
             "hyper_exp" => {
                 assert!(parameters.len() % 2 == 0, 
                     "For function \"{}\" there must be an even number of parameters!", function_name);
@@ -132,7 +132,7 @@ impl WeightFunction {
         (x - self.parameters[0]) / (self.parameters[1] - self.parameters[0])
     }
 
-    /// Calculates the Kumarasawamy distribution CDF at a given point x. It is generalized to an arbitrary
+    /// Calculates the Kumaraswamy distribution CDF at a given point x. It is generalized to an arbitrary
     /// interval by the parameters.
     /// 
     /// The parameters are in the form (x_min, x_max, A, B) and the CDF is calculated in the following
