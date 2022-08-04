@@ -326,7 +326,8 @@ impl LoCoHD {
         prim_a: Vec<PrimitiveAtom>, 
         prim_b: Vec<PrimitiveAtom>, 
         anchor_pairs: Vec<(usize, usize)>, 
-        only_hetero_contacts: bool) -> Vec<f64> {
+        only_hetero_contacts: bool,
+        threshold_distance: f64) -> Vec<f64> {
 
         let mut dmx_a: HashMap<(usize, usize), f64> = HashMap::new();
         let mut dmx_b: HashMap<(usize, usize), f64> = HashMap::new();
@@ -352,16 +353,20 @@ impl LoCoHD {
 
                 let idx_pair = if idx_a1 > idx_a2 { (idx_a2, idx_a1) } else { (idx_a1, idx_a2) };
 
-                match dmx_a.get(&idx_pair) {
-                    Some(&dist) => {
-                        dists_a.push(dist);
-                    },
+                let dist = match dmx_a.get(&idx_pair) {
+                    Some(&dist) => dist,
                     None => {
                         let dist = euclidean_distance(&prim_a[idx_a1].coordinates, &prim_a[idx_a2].coordinates);
-                        dists_a.push(dist);
                         dmx_a.insert(idx_pair, dist);
+                        dist
                     }
+                };
+
+                if dist > threshold_distance {
+                    continue;
                 }
+
+                dists_a.push(dist);                
                 seq_a.push(prim_a[idx_a2].primitive_type.clone());
             }
 
@@ -382,16 +387,20 @@ impl LoCoHD {
 
                 let idx_pair = if idx_b1 > idx_b2 { (idx_b2, idx_b1) } else { (idx_b1, idx_b2) };
 
-                match dmx_b.get(&idx_pair) {
-                    Some(&dist) => {
-                        dists_b.push(dist);
-                    },
+                let dist = match dmx_b.get(&idx_pair) {
+                    Some(&dist) => dist,
                     None => {
                         let dist = euclidean_distance(&prim_b[idx_b1].coordinates, &prim_b[idx_b2].coordinates);
-                        dists_b.push(dist);
                         dmx_b.insert(idx_pair, dist);
+                        dist
                     }
+                };
+
+                if dist > threshold_distance {
+                    continue;
                 }
+
+                dists_b.push(dist);
                 seq_b.push(prim_b[idx_b2].primitive_type.clone());
             }
 
