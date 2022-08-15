@@ -70,3 +70,6 @@ docs/_build/
 
 # Pyenv
 .python-version
+
+# python workdir
+python_codes/workdir/
