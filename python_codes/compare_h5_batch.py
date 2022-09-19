@@ -94,14 +94,70 @@ def assign_primitive_structure(chain: Chain) -> Tuple[List[ATOM_ID], List[str]]:
     return accepted_atoms, primitive_sequence
 
 
-def compare_structures(prot_root_path: Path, save_name: str):
+def plot_result(chain_chain_dmx_mean: np.ndarray,
+                lchd_by_atom: np.ndarray,
+                dmx_lchd_min: float,
+                dmx_lchd_max: float,
+                save_dir: Path,
+                save_name: str):
+
+    fig, ax = plt.subplots(1, 2)
+
+    im = ax[0].imshow(chain_chain_dmx_mean, cmap="coolwarm", vmin=dmx_lchd_min, vmax=dmx_lchd_max)
+    divider = make_axes_locatable(ax[0])
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    cbar = fig.colorbar(im, cax=cax)
+    cbar_ticks = np.arange(dmx_lchd_min, dmx_lchd_max, 0.025)
+    cbar.set_ticks(cbar_ticks, labels=[f"{tick:.1%}" for tick in cbar_ticks])
+
+    ax[0].set_xticks([])
+    ax[0].set_yticks([])
+    ax[0].set_title("LoCoHD Score of\nthe Structure Pairs")
+
+    ax[1].plot(np.sort(lchd_by_atom), c="black")
+    ax[1].set_xlabel("Rank of atom by sorted LoCoHD score")
+    ax[1].set_ylabel("LoCoHD score")
+    ax[1].set_title("Distribution of\nAtom LoCoHD Scores")
+
+    atom_lchd_mean = np.mean(lchd_by_atom)
+    atom_lchd_std = np.std(lchd_by_atom)
+    ax[1].plot([0, len(lchd_by_atom)], [atom_lchd_mean, atom_lchd_mean], c="red")
+    ax[1].fill_between([0, len(lchd_by_atom)],
+                       2 * [atom_lchd_mean - atom_lchd_std, ],
+                       2 * [atom_lchd_mean + atom_lchd_std, ],
+                       alpha=0.25, color="red", edgecolor=None)
+
+    atom_lchd_min = np.min(lchd_by_atom)
+    atom_lchd_max = np.max(lchd_by_atom)
+    plot_ticks = np.arange(atom_lchd_min, atom_lchd_max, (atom_lchd_max - atom_lchd_min) / 10)
+    ax[1].set_yticks(plot_ticks, labels=[f"{tick:.1%}" for tick in plot_ticks])
+
+    atom_lchd_median = np.median(lchd_by_atom)
+    legend_labels = list()
+    legend_labels.append(f"Min = {atom_lchd_min:.1%}")
+    legend_labels.append(f"Max = {atom_lchd_max:.1%}")
+    legend_labels.append(f"Mean = {atom_lchd_mean:.1%}")
+    legend_labels.append(f"Median = {atom_lchd_median:.1%}")
+    legend_labels.append(f"StD = {atom_lchd_std:.1%}")
+    legend_handles = Rectangle((0, 0), 1, 1, fc="white", ec="white", lw=0, alpha=0)
+    legend_handles = [legend_handles, ] * len(legend_labels)
+    ax[1].legend(legend_handles, legend_labels,
+                 loc="best", fontsize="small", fancybox=True,
+                 framealpha=0.7, handlelength=0, handletextpad=0)
+
+    plt.tight_layout()
+    fig.savefig(save_dir / f"{save_name}_plot.png", dpi=300)
+
+
+def compare_structures(prot_root_path: Path, save_dir: Path, save_name: str):
 
     print(f"Starting {save_name}...")
 
     # Read proteins
     prot_chains: List[Chain] = list()
+    all_files = os.listdir(prot_root_path)  # [:10]
     file_name: str
-    for file_name in os.listdir(prot_root_path):
+    for file_name in all_files:
         prot_structure = PDBParser(QUIET=True).get_structure("", prot_root_path / file_name)
         prot_chains.append(prot_structure[0].child_list[0])
     del prot_structure
@@ -151,56 +207,8 @@ def compare_structures(prot_root_path: Path, save_name: str):
     print(f"Std of runtimes: {np.std(runtimes):.10f} s")
     print(f"Total runtime: {np.sum(runtimes):.5f} s")
 
-    # Plots
-    fig, ax = plt.subplots(1, 2)
-
     sorted_dmx_mask = np.argsort(np.mean(chain_chain_dmx_mean, axis=0))
     chain_chain_dmx_mean = chain_chain_dmx_mean[:, sorted_dmx_mask][sorted_dmx_mask, :]
-
-    im = ax[0].imshow(chain_chain_dmx_mean, cmap="coolwarm")
-    divider = make_axes_locatable(ax[0])
-    cax = divider.append_axes("right", size="5%", pad=0.05)
-    cbar = fig.colorbar(im, cax=cax)
-    cbar_ticks = np.arange(0, np.max(chain_chain_dmx_mean), 0.025)
-    cbar.set_ticks(cbar_ticks, labels=[f"{tick:.1%}" for tick in cbar_ticks])
-
-    ax[0].set_xticks([])
-    ax[0].set_yticks([])
-    ax[0].set_title("LoCoHD Score of\nthe Structure Pairs")
-
-    ax[1].plot(np.sort(lchd_by_atom), c="black")
-    ax[1].set_xlabel("Rank of atom by sorted LoCoHD score")
-    ax[1].set_ylabel("LoCoHD score")
-    ax[1].set_title("Distribution of\nAtom LoCoHD Scores")
-
-    atom_lchd_mean = np.mean(lchd_by_atom)
-    atom_lchd_std = np.std(lchd_by_atom)
-    ax[1].plot([0, len(lchd_by_atom)], [atom_lchd_mean, atom_lchd_mean], c="red")
-    ax[1].fill_between([0, len(lchd_by_atom)],
-                       2 * [atom_lchd_mean - atom_lchd_std, ],
-                       2 * [atom_lchd_mean + atom_lchd_std, ],
-                       alpha=0.25, color="red", edgecolor=None)
-
-    atom_lchd_min = np.min(lchd_by_atom)
-    atom_lchd_max = np.max(lchd_by_atom)
-    plot_ticks = np.arange(atom_lchd_min, atom_lchd_max, (atom_lchd_max - atom_lchd_min) / 10)
-    ax[1].set_yticks(plot_ticks, labels=[f"{tick:.1%}" for tick in plot_ticks])
-
-    atom_lchd_median = np.median(lchd_by_atom)
-    legend_labels = list()
-    legend_labels.append(f"Min = {atom_lchd_min:.1%}")
-    legend_labels.append(f"Max = {atom_lchd_max:.1%}")
-    legend_labels.append(f"Mean = {atom_lchd_mean:.1%}")
-    legend_labels.append(f"Median = {atom_lchd_median:.1%}")
-    legend_labels.append(f"StD = {atom_lchd_std:.1%}")
-    legend_handles = Rectangle((0, 0), 1, 1, fc="white", ec="white", lw=0, alpha=0)
-    legend_handles = [legend_handles, ] * len(legend_labels)
-    ax[1].legend(legend_handles, legend_labels,
-                 loc="best", fontsize="small", fancybox=True,
-                 framealpha=0.7, handlelength=0, handletextpad=0)
-
-    plt.tight_layout()
-    fig.savefig(f"./workdir/prot_batch_resuls/{save_name}_plot.png", dpi=300)
 
     # Save b-factor labelled structure
     pdb_io = PDBIO()
@@ -210,29 +218,37 @@ def compare_structures(prot_root_path: Path, save_name: str):
         prot_chains[0][atom_id[0]][atom_id[1]].bfactor = 100 * lchd_score
             
     pdb_io.set_structure(prot_chains[0])
-    pdb_io.save(f"./workdir/prot_batch_resuls/{save_name}_blabelled.pdb",
-                select=AtomSelector(accepted_atoms))
+    pdb_io.save(str(save_dir / f"{save_name}_blabelled.pdb"), select=AtomSelector(accepted_atoms))
+
+    return chain_chain_dmx_mean, lchd_by_atom
 
 
 def main():
 
-    prot_root_path = Path("./workdir/pdb_files/h5")
-    compare_structures(prot_root_path, "h5_dummy")
+    save_dir = Path("./workdir/prot_batch_resuls")
+    paths_and_names = [
+        # ("./workdir/pdb_files/h5", "h5_dummy"),
+        ("/home/fazekaszs/CoreDir/PhD/PDB/H5/277", "h5_277"),
+        ("/home/fazekaszs/CoreDir/PhD/PDB/H5/288", "h5_288"),
+        ("/home/fazekaszs/CoreDir/PhD/PDB/H5/299", "h5_299"),
+        ("/home/fazekaszs/CoreDir/PhD/PDB/H5/310", "h5_310"),
+        ("/home/fazekaszs/CoreDir/PhD/PDB/H5/321", "h5_321"),
+    ]
 
-    prot_root_path = Path("/home/fazekaszs/CoreDir/PhD/PDB/H5/277")
-    compare_structures(prot_root_path, "h5_277")
+    all_chain_chain_dmxs, all_lchd_by_atom = list(), list()
 
-    prot_root_path = Path("/home/fazekaszs/CoreDir/PhD/PDB/H5/288")
-    compare_structures(prot_root_path, "h5_288")
+    for prot_root_path, prot_name in paths_and_names:
 
-    prot_root_path = Path("/home/fazekaszs/CoreDir/PhD/PDB/H5/299")
-    compare_structures(prot_root_path, "h5_299")
+        temp_dmx, temp_atom_lchds = compare_structures(Path(prot_root_path), save_dir, prot_name)
+        all_chain_chain_dmxs.append(temp_dmx)
+        all_lchd_by_atom.append(temp_atom_lchds)
 
-    prot_root_path = Path("/home/fazekaszs/CoreDir/PhD/PDB/H5/310")
-    compare_structures(prot_root_path, "h5_310")
+    print("Starting to plot!")
+    dmx_lchd_min = np.min(all_chain_chain_dmxs)
+    dmx_lchd_max = np.max(all_chain_chain_dmxs)
 
-    prot_root_path = Path("/home/fazekaszs/CoreDir/PhD/PDB/H5/321")
-    compare_structures(prot_root_path, "h5_321")
+    for chain_chain_dmx, lchd_by_atom, (_, prot_name) in zip(all_chain_chain_dmxs, all_lchd_by_atom, paths_and_names):
+        plot_result(chain_chain_dmx, lchd_by_atom, dmx_lchd_min, dmx_lchd_max, save_dir, prot_name)
 
 
 if __name__ == "__main__":

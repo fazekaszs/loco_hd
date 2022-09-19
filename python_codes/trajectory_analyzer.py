@@ -16,10 +16,10 @@ PRIMITIVE_TYPES = ["O_neg", "O_neu", "N_pos", "N_neu", "C_ali", "C_aro", "S"]
 SIDECHAIN_ATOMS = [
         ["GLU:OE1", "GLU:OE2", "ASP:OD1", "ASP:OD2"],
         ["GLN:OE1", "ASN:OD1", "SER:OG", "THR:OG1", "TYR:OH"],
-        # ["ARG:NE", "ARG:NH1", "ARG:NH2", "LYS:NZ"],  # old arginine primitives
-        ["ARG:NE", "LYS:NZ"],  # new arginine primitives
-        # ["GLN:NE2", "ASN:ND2", "HIS:ND1", "HIS:NE2", "TRP:NE1"],  # old arginine primitives
-        ["GLN:NE2", "ASN:ND2", "HIS:ND1", "HIS:NE2", "TRP:NE1", "ARG:NH1", "ARG:NH2"],  # new arginine primitives
+        ["ARG:NE", "ARG:NH1", "ARG:NH2", "LYS:NZ"],  # old arginine primitives
+        # ["ARG:NE", "LYS:NZ"],  # new arginine primitives
+        ["GLN:NE2", "ASN:ND2", "HIS:ND1", "HIS:NE2", "TRP:NE1"],  # old arginine primitives
+        # ["GLN:NE2", "ASN:ND2", "HIS:ND1", "HIS:NE2", "TRP:NE1", "ARG:NH1", "ARG:NH2"],  # new arginine primitives
         ["ALA:CB", "VAL:CB", "VAL:CG1", "VAL:CG2", "ILE:CB", "ILE:CG1",
          "ILE:CG2", "ILE:CD1", "ILE:CD", "LEU:CB", "LEU:CG", "LEU:CD1",
          "LEU:CD2", "PHE:CB", "SER:CB", "THR:CB", "THR:CG2", "ASP:CB",
@@ -144,7 +144,7 @@ def main():
         legend_handles = [legend_handles, ] * len(legend_labels)
 
         ax.legend(legend_handles, legend_labels,
-                  loc="upper right", fontsize="small", fancybox=True,
+                  loc="lower right", fontsize="small", fancybox=True,
                   framealpha=0.7, handlelength=0, handletextpad=0)
         ax.plot(x_values, y_values, c="black")
         ax.set_xlabel("$t$ / ns")

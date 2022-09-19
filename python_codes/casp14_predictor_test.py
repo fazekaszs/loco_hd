@@ -113,11 +113,14 @@ def lddt_from_text(text: str):
     return text
 
 
-def n_of_points_to_alpha(n_of_points: int):
+def get_plot_alpha(lchd_scores, lddt_scores):
 
-    if n_of_points <= 200:
-        return 1.0
-    return 1 / (n_of_points - 200) ** 0.2
+    area_per_tick = np.max(lchd_scores) - np.min(lchd_scores)
+    area_per_tick *= np.max(lddt_scores) - np.min(lddt_scores)
+    area_per_tick /= len(lddt_scores)
+    area_per_tick *= 1E3
+
+    return area_per_tick if area_per_tick < 1. else 1.
 
 
 def main():
@@ -127,7 +130,7 @@ def main():
     # BAKER-experimental: TS403
     # FEIG-R2: TS480
     # Zhang: TS129
-    predictor_key = "TS129"
+    predictor_key = "TS427"
 
     lchd = LoCoHD(PRIMITIVE_TYPES + ["Cent", ], ("uniform", [3, 10]))
     lddt_tars_path = Path("/home/fazekaszs/CoreDir/PhD/PDB/casp14/lDDTs")
@@ -187,12 +190,23 @@ def main():
 
             # Updating the statistics.
             spr_values.append(spearmanr(lchd_scores, lddt_scores).correlation)
-            median_lddts.append(np.median(lddt_scores))
             median_lchds.append(np.median(lchd_scores))
+            median_lddts.append(np.median(lddt_scores))
 
             # Plotting.
             ax.cla()
-            ax.scatter(lchd_scores, lddt_scores, alpha=n_of_points_to_alpha(len(lchd_scores)))
+            ax.scatter(lchd_scores, lddt_scores,
+                       alpha=get_plot_alpha(lchd_scores, lddt_scores),
+                       edgecolors="none", c="red")
+
+            lchd_range = np.arange(0, 0.5, 0.05)
+            lddt_range = np.arange(0, 1, 0.1)
+
+            ax.set_xticks(lchd_range, labels=[f"{tick:.0%}" for tick in lchd_range])
+            ax.set_yticks(lddt_range, labels=[f"{tick:.0%}" for tick in lddt_range])
+            ax.set_xlim(0, 0.5)
+            ax.set_ylim(0, 1)
+
             ax.set_xlabel("LoCoHD score")
             ax.set_ylabel("lDDT score")
             fig.suptitle(key1)
