@@ -1,0 +1,40 @@
+[AmideC]
+    *:C,
+    ASN:CG,
+    GLN:CD
+
+[OH]
+    SER:OG,
+    THR:OG1,
+    TYR:OH
+
+[Pos]
+    ARG:CZ,
+    LYS:NZ
+
+[Neg]
+    *:OT1-OT2, *:OC1-OC2, *:O-OXT,
+    GLU:OE1-OE2,
+    ASP:OD1-OD2
+
+[Aro]
+    PHE:CG-CZ,
+    TYR:CG-CZ,
+    TRP:CD2-CH2, TRP:CG-CD1-CD2-NE1-CE2
+
+[Ali]
+    ALA:CB,
+    VAL:CB-CG1-CG2,
+    ILE:CB-CG1-CG2-CD1,
+    LEU:CB-CG-CD1-CD2,
+    THR:CG2,
+    GLU:CB-CG,
+    GLN:CB-CG,
+    ARG:CB-CG-CD,
+    LYS:CB-CG-CD-CE,
+    MET:CB-CG-SD-CE,
+    PRO:CB-CG-CD
+
+[Sulf]
+    CYS:SG,
+    MET:SD
