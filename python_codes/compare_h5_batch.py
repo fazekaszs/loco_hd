@@ -14,30 +14,10 @@ from Bio.PDB.Residue import Residue
 from Bio.PDB.Atom import Atom
 from Bio.PDB.PDBIO import PDBIO, Select
 
-from loco_hd import LoCoHD
+from loco_hd import LoCoHD, PrimitiveAtom
+from atom_converter_utils import PrimitiveAssigner, PrimitiveAtomTemplate, PrimitiveAtomSource
 
 ATOM_ID = Tuple[int, str]
-TERMINAL_O = ["OT1", "OT2", "OC1", "OC2", "OXT"]
-PRIMITIVE_TYPES = ["O_neg", "O_neu", "N_pos", "N_neu", "C_ali", "C_aro", "S"]
-SIDECHAIN_ATOMS = [
-        ["GLU:OE1", "GLU:OE2", "ASP:OD1", "ASP:OD2"],
-        ["GLN:OE1", "ASN:OD1", "SER:OG", "THR:OG1", "TYR:OH"],
-        ["ARG:NE", "ARG:NH1", "ARG:NH2", "LYS:NZ"],
-        ["GLN:NE2", "ASN:ND2", "HIS:ND1", "HIS:NE2", "TRP:NE1"],
-        ["ALA:CB", "VAL:CB", "VAL:CG1", "VAL:CG2", "ILE:CB", "ILE:CG1",
-         "ILE:CG2", "ILE:CD1", "ILE:CD", "LEU:CB", "LEU:CG", "LEU:CD1",
-         "LEU:CD2", "PHE:CB", "SER:CB", "THR:CB", "THR:CG2", "ASP:CB",
-         "ASP:CG", "ASN:CB", "ASN:CG", "GLU:CB", "GLU:CG", "GLU:CD",
-         "GLN:CB", "GLN:CG", "GLN:CD", "ARG:CB", "ARG:CG", "ARG:CD",
-         "ARG:CE", "ARG:CZ", "LYS:CB", "LYS:CG", "LYS:CD", "LYS:CE",
-         "HIS:CB", "CYS:CB", "MET:CB", "MET:CG", "MET:CE", "PRO:CB",
-         "PRO:CG", "PRO:CD", "TYR:CB", "TRP:CB"],
-        ["HIS:CG", "HIS:CD2", "HIS:CE1", "PHE:CG", "PHE:CD1", "PHE:CD2",
-         "PHE:CE1", "PHE:CE2", "PHE:CZ", "TYR:CG", "TYR:CD1", "TYR:CD2",
-         "TYR:CE1", "TYR:CE2", "TYR:CZ", "TRP:CG", "TRP:CD1", "TRP:CD2",
-         "TRP:CE2", "TRP:CE3", "TRP:CZ2", "TRP:CZ3", "TRP:CH2"],
-        ["CYS:SG", "MET:SD"]
-]
 
 
 class AtomSelector(Select):
@@ -52,46 +32,6 @@ class AtomSelector(Select):
         if (resi.get_id()[1], atom.get_name()) in self.accepted_atoms:
             return True
         return False
-
-
-def assign_primitive_type(resi_name: str, atom_name: str) -> Union[str, None]:
-
-    # Backbone atoms:
-    if atom_name in ["CA", "C"]:
-        return "C_ali"
-    if atom_name == "O":
-        return "O_neu"
-    if atom_name == "N":
-        return "N_neu"
-    if atom_name in TERMINAL_O:
-        return "O_neg"
-
-    # Sidechain atoms:
-    for group_idx, atom_group in enumerate(SIDECHAIN_ATOMS):
-        if f"{resi_name}:{atom_name}" in atom_group:
-            return PRIMITIVE_TYPES[group_idx]
-
-    return None
-
-
-def assign_primitive_structure(chain: Chain) -> Tuple[List[ATOM_ID], List[str]]:
-
-    primitive_sequence = list()
-    accepted_atoms = list()
-
-    atom: Atom
-    for atom in chain.get_atoms():
-
-        primitive_atom = assign_primitive_type(atom.parent.get_resname(), atom.get_name())
-        if primitive_atom is not None:
-
-            primitive_sequence.append(primitive_atom)
-
-            atom_id = atom.full_id
-            atom_id = (atom_id[3][1], atom_id[4][0])
-            accepted_atoms.append(atom_id)
-
-    return accepted_atoms, primitive_sequence
 
 
 def plot_result(chain_chain_dmx_mean: np.ndarray,
@@ -153,74 +93,95 @@ def compare_structures(prot_root_path: Path, save_dir: Path, save_name: str):
 
     print(f"Starting {save_name}...")
 
-    # Read proteins
-    prot_chains: List[Chain] = list()
-    all_files = os.listdir(prot_root_path)  # [:10]
-    file_name: str
-    for file_name in all_files:
-        prot_structure = PDBParser(QUIET=True).get_structure("", prot_root_path / file_name)
-        prot_chains.append(prot_structure[0].child_list[0])
-    del prot_structure
-
-    # Collect primitive atom types
-    atom: Atom
-    accepted_atoms, primitive_sequence = assign_primitive_structure(prot_chains[0])
-    print(f"Number of primitive atoms: {len(primitive_sequence)}")
-
-    # Collect atom distance matrices
-    dmx_collection = list()
-    for chain in prot_chains:
-
-        dmx = list()
-        for atom_id in accepted_atoms:
-            coord = chain[atom_id[0]][atom_id[1]].coord
-            dmx.append(coord)
-
-        dmx = np.array(dmx)
-        dmx = dmx[np.newaxis, :, :] - dmx[:, np.newaxis, :]
-        dmx = np.sqrt(np.sum(dmx ** 2, axis=2))
-        dmx_collection.append(dmx)
+    # Create the PrimitiveAssigner instance
+    primitive_assigner = PrimitiveAssigner(Path("./primitive_typings/atom_converter_config1.json"))
 
     # Initialize LoCoHD instance
-    lchd = LoCoHD(PRIMITIVE_TYPES, ("dagum", [13.4, 6.4, 16.2]))
+    lchd = LoCoHD(primitive_assigner.all_primitive_types, ("dagum", [13.4, 6.4, 16.2]))
+    only_hetero_contacts = False
+    upper_cutoff = 1000
+
+    # Collect all the filenames in the directory
+    all_files: List[str] = os.listdir(prot_root_path)
+    all_files = list(filter(lambda x: x.endswith(".pdb"), all_files))
+
+    # Read proteins and create the primitive atom template lists
+    template_lists: List[List[PrimitiveAtomTemplate]] = list()
+    file_name: str
+    for file_name in all_files:
+
+        prot_structure = PDBParser(QUIET=True).get_structure("", prot_root_path / file_name)
+        primitive_atom_templates = primitive_assigner.assign_primitive_structure(prot_structure)
+        template_lists.append(primitive_atom_templates)
+
+    del file_name, prot_structure, primitive_atom_templates
+
+    # Collect the accepted atoms
+    accepted_atoms = list()
+    for pra_template in template_lists[0]:
+        resi_number = pra_template.atom_source.source_residue[3][1]
+        atom_name = pra_template.atom_source.source_atom[0]
+        accepted_atoms.append((resi_number, atom_name))
+
+    del pra_template, resi_number, atom_name
+
+    # Collect primitive atoms
+    primitive_atom_lists: List[List[PrimitiveAtom]] = list()
+    for template_list in template_lists:
+        pra_list = list()
+        for pra_template in template_list:
+            primitive_atom = PrimitiveAtom(pra_template.primitive_type,
+                                           f"{pra_template.atom_source.source_residue[3][1]}",
+                                           pra_template.coordinates)
+            pra_list.append(primitive_atom)
+        primitive_atom_lists.append(pra_list)
+
+    del template_list, pra_template, pra_list, primitive_atom
+
+    # Define anchor atom indices
+    anchor_atoms = list(range(len(primitive_atom_lists[0])))
+    anchor_atoms = list(map(lambda x: (x, x), anchor_atoms))
 
     # Calculate lchd mean and std values
+    n_of_structures = len(primitive_atom_lists)
+    chain_chain_mean_locohd_mx = np.zeros((n_of_structures, n_of_structures))
     runtimes = list()
-    chain_chain_dmx_mean = np.zeros((len(prot_chains), len(prot_chains)))
     lchd_by_atom = list()
-    for idx1 in range(len(prot_chains)):
-        for idx2 in range(idx1 + 1, len(prot_chains)):
+    for idx1 in range(n_of_structures):
+        for idx2 in range(idx1 + 1, n_of_structures):
 
             start_time = time()
-            lchd_all = lchd.from_dmxs(primitive_sequence,
-                                      primitive_sequence,
-                                      dmx_collection[idx1],
-                                      dmx_collection[idx2])
+            lchd_all = lchd.from_primitives(primitive_atom_lists[idx1],
+                                            primitive_atom_lists[idx2],
+                                            anchor_atoms,
+                                            only_hetero_contacts,
+                                            upper_cutoff)
             end_time = time()
             runtimes.append(end_time - start_time)
             lchd_by_atom.append(lchd_all)
 
-            chain_chain_dmx_mean[idx1, idx2] = chain_chain_dmx_mean[idx2, idx1] = np.mean(lchd_all)
+            chain_chain_mean_locohd_mx[idx1, idx2] = chain_chain_mean_locohd_mx[idx2, idx1] = np.mean(lchd_all)
 
     lchd_by_atom = np.mean(lchd_by_atom, axis=0)
     print(f"Mean time per run: {np.mean(runtimes):.5f} s")
     print(f"Std of runtimes: {np.std(runtimes):.10f} s")
     print(f"Total runtime: {np.sum(runtimes):.5f} s")
 
-    sorted_dmx_mask = np.argsort(np.mean(chain_chain_dmx_mean, axis=0))
-    chain_chain_dmx_mean = chain_chain_dmx_mean[:, sorted_dmx_mask][sorted_dmx_mask, :]
+    sorted_dmx_mask = np.argsort(np.mean(chain_chain_mean_locohd_mx, axis=0))
+    chain_chain_mean_locohd_mx = chain_chain_mean_locohd_mx[:, sorted_dmx_mask][sorted_dmx_mask, :]
 
     # Save b-factor labelled structure
     pdb_io = PDBIO()
+    prot_structure = PDBParser(QUIET=True).get_structure("", prot_root_path / all_files[0])
+    prot_chain = prot_structure[0].child_list[0]
 
-    for lchd_score, atom_id in zip(lchd_by_atom, accepted_atoms):
-
-        prot_chains[0][atom_id[0]][atom_id[1]].bfactor = 100 * lchd_score
+    for lchd_score, (resi_number, atom_name) in zip(lchd_by_atom, accepted_atoms):
+        prot_chain[resi_number][atom_name].bfactor = 100 * lchd_score
             
-    pdb_io.set_structure(prot_chains[0])
+    pdb_io.set_structure(prot_structure)
     pdb_io.save(str(save_dir / f"{save_name}_blabelled.pdb"), select=AtomSelector(accepted_atoms))
 
-    return chain_chain_dmx_mean, lchd_by_atom
+    return chain_chain_mean_locohd_mx, lchd_by_atom
 
 
 def main():
