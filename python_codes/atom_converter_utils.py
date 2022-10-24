@@ -131,7 +131,12 @@ class PrimitiveAssigner:
     def all_primitive_types(self, value):
         raise Exception("Cannot set all_primitive_types directly, since it depends on the config file!")
 
-    def assign_primitive_structure(self, structure: AtomHolders) -> List[PrimitiveAtomTemplate]:
+    def assign_primitive_structure(self, structure: AtomHolders,
+                                   verbose: bool = False) -> List[PrimitiveAtomTemplate]:
+
+        def warn(warn_msg: str):
+            if verbose:
+                print(warn_msg)
 
         out = list()
 
@@ -160,7 +165,7 @@ class PrimitiveAssigner:
                     if atom_name in resi:
                         partial_centroid_coord.append(resi[atom_name].coord)
                     else:
-                        print(f"Warning: no atom named {atom_name} in residue {resi_id} ({resi.resname})!")
+                        warn(f"Warning: no atom named {atom_name} in residue {resi_id} ({resi.resname})!")
                         break
                 else:
 
@@ -174,7 +179,7 @@ class PrimitiveAssigner:
             for atom_name, primitive_type in self.converter_dict["*:A"]:
 
                 if atom_name not in resi:
-                    print(f"Warning: no atom named {atom_name} in residue {resi_id} ({resi.resname})!")
+                    warn(f"Warning: no atom named {atom_name} in residue {resi_id} ({resi.resname})!")
                     continue
 
                 pra_source = PrimitiveAtomSource(resi_id, [atom_name, ])
@@ -204,7 +209,7 @@ class PrimitiveAssigner:
                         if atom_name in resi:
                             partial_centroid_coord.append(resi[atom_name].coord)
                         else:
-                            print(f"Warning: no atom named {atom_name} in residue {resi_id} ({resi.resname})!")
+                            warn(f"Warning: no atom named {atom_name} in residue {resi_id} ({resi.resname})!")
                             break
                     else:
 
@@ -220,7 +225,7 @@ class PrimitiveAssigner:
                 for atom_name, primitive_type in self.converter_dict["X:A"][resi.resname]:
 
                     if atom_name not in resi:
-                        print(f"Warning: no atom named {atom_name} in residue {resi_id} ({resi.resname})!")
+                        warn(f"Warning: no atom named {atom_name} in residue {resi_id} ({resi.resname})!")
                         continue
 
                     pra_source = PrimitiveAtomSource(resi_id, [atom_name, ])

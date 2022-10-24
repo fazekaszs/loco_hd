@@ -92,18 +92,18 @@ struct LoCoHD {
 impl LoCoHD {
 
     #[new]
-    fn __new__(categories: Vec<String>, integrator: (String, Vec<f64>)) -> Self {
+    fn new(categories: Vec<String>, integrator: (String, Vec<f64>)) -> Self {
         Self { 
-            categories: categories, 
+            categories,
             integrator: WeightFunction::new(integrator.0, integrator.1) 
         }
     }
 
-    /// test_integrator(x, /)
-    /// --
-    /// 
-    /// Tests the integrated weight function on a list of values x. Returns the integrated
-    /// value from 0 to x.
+    /// Tests the integrated weight function on a list of x[n] values. Returns the integrated
+    /// value from 0 to x[n].
+    /// :param x: The distances at which the CDF is calculated.
+    /// :type x: List[float]
+    #[pyo3(text_signature = "(x, /)")]
     fn test_integrator(&self, x: Vec<f64>) -> Vec<f64> {
         let mut output = vec![];
         for item in x {
@@ -113,10 +113,8 @@ impl LoCoHD {
         output
     }
 
-    /// from_anchors(seq_a, seq_b, dists_a, dists_b, /)
-    /// --
-    /// 
     /// Calculates the hellinger integral between two environments belonging to two anchor points.
+    #[pyo3(text_signature = "(seq_a, seq_b, dists_a, dists_b, /)")]
     fn from_anchors(&self, seq_a: Vec<String>, seq_b: Vec<String>, dists_a: Vec<f64>, dists_b: Vec<f64>) -> f64 {
 
         // Check input validity.
@@ -271,11 +269,9 @@ impl LoCoHD {
         h_integral
     }
 
-    /// from_dmxs(seq_a, seq_b, dmx_a, dmx_b, /)
-    /// --
-    /// 
     /// Compares two structures with a given sequence pair of categories (seq_a and seq_b) 
     /// and a given distance matrix pair (dmx_a and dmx_b). 
+    #[pyo3(text_signature = "(seq_a, seq_b, dmx_a, dists_b, /)")]
     fn from_dmxs(&self, seq_a: Vec<String>, seq_b: Vec<String>, dmx_a: Vec<Vec<f64>>, dmx_b: Vec<Vec<f64>>) -> Vec<f64> {
 
         // Check input validity.
@@ -296,12 +292,10 @@ impl LoCoHD {
         output
     }
 
-    /// from_coords(seq_a, seq_b, coords_a, coords_b, /)
-    /// --
-    /// 
     /// Compares two structures with a given sequence pair of categories (coords_a and coords_b) 
     /// and a given coordinate-set pair (dmx_a and dmx_b). It calculates the distance matrices
     /// with the p2 (Euclidean) metric.
+    #[pyo3(text_signature = "(seq_a, seq_b, coords_a, coords_b, /)")]
     fn from_coords(&self, seq_a: Vec<String>, seq_b: Vec<String>, coords_a: Vec<Vec<f64>>, coords_b: Vec<Vec<f64>>) -> Vec<f64> {
 
         let calculate_dmx = |coords: &Vec<Vec<f64>>| {
@@ -322,6 +316,8 @@ impl LoCoHD {
 
     }
 
+    /// Compares two structures with a given primitive atom sequence pair.
+    #[pyo3(text_signature = "(prim_a, prim_b, anchor_pairs, only_hetero_contacts, threshold_distance, /)")]
     fn from_primitives(&self, 
         prim_a: Vec<PrimitiveAtom>, 
         prim_b: Vec<PrimitiveAtom>, 

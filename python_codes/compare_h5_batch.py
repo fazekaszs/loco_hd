@@ -5,17 +5,16 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.patches import Rectangle
 from pathlib import Path
-from typing import List, Union, Tuple
+from typing import List, Tuple
 from time import time
 
 from Bio.PDB.PDBParser import PDBParser
-from Bio.PDB.Chain import Chain
 from Bio.PDB.Residue import Residue
 from Bio.PDB.Atom import Atom
 from Bio.PDB.PDBIO import PDBIO, Select
 
-from loco_hd import LoCoHD, PrimitiveAtom
-from atom_converter_utils import PrimitiveAssigner, PrimitiveAtomTemplate, PrimitiveAtomSource
+from loco_hd import LoCoHD
+from atom_converter_utils import PrimitiveAssigner, PrimitiveAtomTemplate
 
 ATOM_ID = Tuple[int, str]
 
@@ -94,12 +93,10 @@ def compare_structures(prot_root_path: Path, save_dir: Path, save_name: str):
     print(f"Starting {save_name}...")
 
     # Create the PrimitiveAssigner instance
-    primitive_assigner = PrimitiveAssigner(Path("./primitive_typings/atom_converter_config1.json"))
+    primitive_assigner = PrimitiveAssigner(Path("./primitive_typings/atom_converter_config2.json"))
 
     # Initialize LoCoHD instance
-    lchd = LoCoHD(primitive_assigner.all_primitive_types, ("dagum", [13.4, 6.4, 16.2]))
-    only_hetero_contacts = False
-    upper_cutoff = 1000
+    lchd = LoCoHD(primitive_assigner.all_primitive_types, ("uniform", [0., 10.]))
 
     # Collect all the filenames in the directory
     all_files: List[str] = os.listdir(prot_root_path)
@@ -116,34 +113,34 @@ def compare_structures(prot_root_path: Path, save_dir: Path, save_name: str):
 
     del file_name, prot_structure, primitive_atom_templates
 
-    # Collect the accepted atoms
-    accepted_atoms = list()
+    # Collect the accepted atoms and the primitive_sequence
+    primitive_sequence, accepted_atoms = list(), list()
     for pra_template in template_lists[0]:
+
         resi_number = pra_template.atom_source.source_residue[3][1]
         atom_name = pra_template.atom_source.source_atom[0]
         accepted_atoms.append((resi_number, atom_name))
 
+        primitive_sequence.append(pra_template.primitive_type)
+
     del pra_template, resi_number, atom_name
 
-    # Collect primitive atoms
-    primitive_atom_lists: List[List[PrimitiveAtom]] = list()
+    # Create the distance matrices
+    dmx_list: List[np.ndarray] = list()
     for template_list in template_lists:
-        pra_list = list()
+
+        dmx = list()
         for pra_template in template_list:
-            primitive_atom = PrimitiveAtom(pra_template.primitive_type,
-                                           f"{pra_template.atom_source.source_residue[3][1]}",
-                                           pra_template.coordinates)
-            pra_list.append(primitive_atom)
-        primitive_atom_lists.append(pra_list)
+            dmx.append(pra_template.coordinates)
+        dmx = np.array(dmx)
+        dmx = dmx[np.newaxis, ...] - dmx[:, np.newaxis, :]
+        dmx = np.sqrt(np.sum(dmx ** 2, axis=2))
+        dmx_list.append(dmx)
 
-    del template_list, pra_template, pra_list, primitive_atom
-
-    # Define anchor atom indices
-    anchor_atoms = list(range(len(primitive_atom_lists[0])))
-    anchor_atoms = list(map(lambda x: (x, x), anchor_atoms))
+    del template_list, pra_template, dmx
 
     # Calculate lchd mean and std values
-    n_of_structures = len(primitive_atom_lists)
+    n_of_structures = len(dmx_list)
     chain_chain_mean_locohd_mx = np.zeros((n_of_structures, n_of_structures))
     runtimes = list()
     lchd_by_atom = list()
@@ -151,11 +148,10 @@ def compare_structures(prot_root_path: Path, save_dir: Path, save_name: str):
         for idx2 in range(idx1 + 1, n_of_structures):
 
             start_time = time()
-            lchd_all = lchd.from_primitives(primitive_atom_lists[idx1],
-                                            primitive_atom_lists[idx2],
-                                            anchor_atoms,
-                                            only_hetero_contacts,
-                                            upper_cutoff)
+            lchd_all = lchd.from_dmxs(primitive_sequence,
+                                      primitive_sequence,
+                                      dmx_list[idx1],
+                                      dmx_list[idx2])
             end_time = time()
             runtimes.append(end_time - start_time)
             lchd_by_atom.append(lchd_all)

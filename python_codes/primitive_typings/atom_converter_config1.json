@@ -13,7 +13,7 @@
         "ASN:CG",
         "GLU:CG", "GLU:CD",
         "GLN:CG", "GLN:CD",
-        "ARG:CG", "ARG:CD", "ARG:CE", "ARG:CZ",
+        "ARG:CG", "ARG:CD", "ARG:CZ",
         "LYS:CG", "LYS:CD", "LYS:CE",
         "MET:CG", "MET:CE",
         "PRO:CG", "PRO:CD"
