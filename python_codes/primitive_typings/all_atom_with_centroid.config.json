@@ -1,0 +1,29 @@
+{
+    "Cent": ["*:*"],
+    "O_neg": ["*:OT1", "*:OT2", "*:OC1", "*:OC2", ",*:OXT", "GLU:OE1", "GLU:OE2", "ASP:OD1", "ASP:OD2"],
+    "O_neu": ["*:O", "GLN:OE1", "ASN:OD1", "SER:OG", "THR:OG1", "TYR:OH"],
+    "N_pos": ["ARG:NE", "ARG:NH1", "ARG:NH2", "LYS:NZ"],
+    "N_neu": ["*:N", "GLN:NE2", "ASN:ND2", "HIS:ND1", "HIS:NE2", "TRP:NE1"],
+    "C_ali": [
+        "*:CA", "*:C", "*:CB",
+        "VAL:CG1", "VAL:CG2",
+        "ILE:CG1", "ILE:CG2", "ILE:CD1", "ILE:CD",
+        "LEU:CG", "LEU:CD1", "LEU:CD2",
+        "THR:CG2",
+        "ASP:CG",
+        "ASN:CG",
+        "GLU:CG", "GLU:CD",
+        "GLN:CG", "GLN:CD",
+        "ARG:CG", "ARG:CD", "ARG:CZ",
+        "LYS:CG", "LYS:CD", "LYS:CE",
+        "MET:CG", "MET:CE",
+        "PRO:CG", "PRO:CD"
+    ],
+    "C_aro": [
+        "HIS:CG", "HIS:CD2", "HIS:CE1",
+        "PHE:CG", "PHE:CD1", "PHE:CD2", "PHE:CE1", "PHE:CE2", "PHE:CZ",
+        "TYR:CG", "TYR:CD1", "TYR:CD2", "TYR:CE1", "TYR:CE2", "TYR:CZ",
+        "TRP:CG", "TRP:CD1", "TRP:CD2", "TRP:CE2", "TRP:CE3", "TRP:CZ2", "TRP:CZ3", "TRP:CH2"
+    ],
+    "S": ["CYS:SG", "MET:SD"]
+}

@@ -5,91 +5,23 @@ import pickle
 import numpy as np
 
 from pathlib import Path
-from typing import Tuple, Union, List
+from typing import List
 from time import time
 from scipy import stats
 
 from Bio.PDB.PDBParser import PDBParser
 from Bio.PDB.Model import Model
-from Bio.PDB.Residue import Residue
-from Bio.PDB.Atom import Atom
 
 from loco_hd import LoCoHD, PrimitiveAtom
-
-ATOM_ID = Tuple[int, str]
-TERMINAL_O = ["OT1", "OT2", "OC1", "OC2", "OXT"]
-PRIMITIVE_TYPES = ["O_neg", "O_neu", "N_pos", "N_neu", "C_ali", "C_aro", "S"]
-SIDECHAIN_ATOMS = [
-        ["GLU:OE1", "GLU:OE2", "ASP:OD1", "ASP:OD2"],
-        ["GLN:OE1", "ASN:OD1", "SER:OG", "THR:OG1", "TYR:OH"],
-        ["ARG:NE", "ARG:NH1", "ARG:NH2", "LYS:NZ"],
-        ["GLN:NE2", "ASN:ND2", "HIS:ND1", "HIS:NE2", "TRP:NE1"],
-        ["ALA:CB", "VAL:CB", "VAL:CG1", "VAL:CG2", "ILE:CB", "ILE:CG1",
-         "ILE:CG2", "ILE:CD1", "ILE:CD", "LEU:CB", "LEU:CG", "LEU:CD1",
-         "LEU:CD2", "PHE:CB", "SER:CB", "THR:CB", "THR:CG2", "ASP:CB",
-         "ASP:CG", "ASN:CB", "ASN:CG", "GLU:CB", "GLU:CG", "GLU:CD",
-         "GLN:CB", "GLN:CG", "GLN:CD", "ARG:CB", "ARG:CG", "ARG:CD",
-         "ARG:CE", "ARG:CZ", "LYS:CB", "LYS:CG", "LYS:CD", "LYS:CE",
-         "HIS:CB", "CYS:CB", "MET:CB", "MET:CG", "MET:CE", "PRO:CB",
-         "PRO:CG", "PRO:CD", "TYR:CB", "TRP:CB"],
-        ["HIS:CG", "HIS:CD2", "HIS:CE1", "PHE:CG", "PHE:CD1", "PHE:CD2",
-         "PHE:CE1", "PHE:CE2", "PHE:CZ", "TYR:CG", "TYR:CD1", "TYR:CD2",
-         "TYR:CE1", "TYR:CE2", "TYR:CZ", "TRP:CG", "TRP:CD1", "TRP:CD2",
-         "TRP:CE2", "TRP:CE3", "TRP:CZ2", "TRP:CZ3", "TRP:CH2"],
-        ["CYS:SG", "MET:SD"]]
+from atom_converter_utils import PrimitiveAssigner, PrimitiveAtomTemplate
 
 
-def assign_primitive_type(resi_name: str, atom_name: str, exclude_bb: bool = False) -> Union[str, None]:
+def from_pra_template(pra_template: PrimitiveAtomTemplate, model: Model) -> PrimitiveAtom:
 
-    # Backbone atoms:
-    if atom_name in ["CA", "C"]:
-        return "C_ali" if not exclude_bb else None
-    if atom_name == "O":
-        return "O_neu" if not exclude_bb else None
-    if atom_name == "N":
-        return "N_neu" if not exclude_bb else None
-    if atom_name in TERMINAL_O:
-        return "O_neg" if not exclude_bb else None
-
-    # Sidechain atoms:
-    for group_idx, atom_group in enumerate(SIDECHAIN_ATOMS):
-        if f"{resi_name}:{atom_name}" in atom_group:
-            return PRIMITIVE_TYPES[group_idx]
-
-    return None
-
-
-def assign_primitive_structure(model: Model) -> Tuple[List[PrimitiveAtom], List[int]]:
-
-    primitive_sequence = list()
-    anchors = list()
-
-    resi: Residue
-    for resi in model.get_residues():
-
-        full_resi_id = resi.full_id
-        resi_id = f"{full_resi_id[2]}/{full_resi_id[3][1]}-{resi.resname}"
-
-        # Deal with the centroid primitive types
-        centroid_coord = resi.center_of_mass(geometric=True)
-        primitive_atom = PrimitiveAtom("Cent", resi_id, centroid_coord)
-        primitive_sequence.append(primitive_atom)
-        anchors.append(len(primitive_sequence) - 1)
-
-        # Deal with the heavy atom primitive types
-        atom: Atom
-        for atom in resi.get_atoms():
-
-            primitive_type = assign_primitive_type(atom.parent.get_resname(), atom.get_name(), False)
-            if primitive_type is not None:
-
-                primitive_atom = PrimitiveAtom(primitive_type, resi_id, atom.coord)
-                primitive_sequence.append(primitive_atom)
-            else:
-
-                print(f"Unknown atom name: {atom.get_name()} from residue {atom.parent.get_resname()} at {resi_id}")
-
-    return primitive_sequence, anchors
+    resi_id = pra_template.atom_source.source_residue
+    resi_name = model[resi_id[2]][resi_id[3]].resname
+    pra_source = f"{resi_id[2]}/{resi_id[3][1]}-{resi_name}"
+    return PrimitiveAtom(pra_template.primitive_type, pra_source, pra_template.coordinates)
 
 
 def main():
@@ -99,15 +31,18 @@ def main():
     pisces_path = Path("/home/fazekaszs/PycharmProjects/databases/pisces_220222")
     save_path = Path("workdir/pisces")
 
+    primitive_assigner = PrimitiveAssigner(Path("primitive_typings/all_atom_with_centroid.config.json"))
+
     # out_file_name = "results_uniform-3-10_only-hetero-contacts.pickle"
     # out_file_name = "results_uniform-3-10_all-contacts.pickle"
     out_file_name = "results_kumaraswamy-3-10-2-5_only-hetero-contacts.pickle"
 
-    lchd = LoCoHD(PRIMITIVE_TYPES + ["Cent", ], ("kumaraswamy", [3, 10, 2, 5]))
+    lchd = LoCoHD(primitive_assigner.all_primitive_types, ("kumaraswamy", [3, 10, 2, 5]))
     only_hetero_contacts = True
     upper_cutoff = 10
 
-    pdb_files: List[str] = list(filter(lambda x: x.endswith(".pdb"), os.listdir(pisces_path)))
+    pdb_files: List[str] = os.listdir(pisces_path)
+    pdb_files = list(filter(lambda x: x.endswith(".pdb"), pdb_files))
     random.shuffle(pdb_files)
 
     time_per_anchor_list = list()
@@ -122,8 +57,14 @@ def main():
         protein1: Model = PDBParser(QUIET=True).get_structure("", path1)[0]
         protein2: Model = PDBParser(QUIET=True).get_structure("", path2)[0]
 
-        primitive_atoms1, anchors1 = assign_primitive_structure(protein1)
-        primitive_atoms2, anchors2 = assign_primitive_structure(protein2)
+        pra_templates1 = primitive_assigner.assign_primitive_structure(protein1)
+        pra_templates2 = primitive_assigner.assign_primitive_structure(protein2)
+
+        primitive_atoms1 = list(map(lambda x: from_pra_template(x, protein1), pra_templates1))
+        primitive_atoms2 = list(map(lambda x: from_pra_template(x, protein2), pra_templates2))
+
+        anchors1 = [idx for idx, pra_template in enumerate(pra_templates1) if pra_template.primitive_type == "Cent"]
+        anchors2 = [idx for idx, pra_template in enumerate(pra_templates2) if pra_template.primitive_type == "Cent"]
 
         if len(anchors1) < len(anchors2):
             anchors2 = random.sample(anchors2, len(anchors1))
