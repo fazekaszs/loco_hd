@@ -96,11 +96,13 @@ def compare_structures(prot_root_path: Path, save_dir: Path, save_name: str):
     primitive_assigner = PrimitiveAssigner(Path("primitive_typings/coarse_grained.config.json"))
 
     # Initialize LoCoHD instance
-    lchd = LoCoHD(primitive_assigner.all_primitive_types, ("uniform", [0., 10.]))
+    lchd = LoCoHD(primitive_assigner.all_primitive_types, ("hyper_exp", [1., 0.2]))
 
     # Collect all the filenames in the directory
     all_files: List[str] = os.listdir(prot_root_path)
     all_files = list(filter(lambda x: x.endswith(".pdb"), all_files))
+
+    print(f"Found {len(all_files)} files!")
 
     # Read proteins and create the primitive atom template lists
     template_lists: List[List[PrimitiveAtomTemplate]] = list()
@@ -112,6 +114,8 @@ def compare_structures(prot_root_path: Path, save_dir: Path, save_name: str):
         template_lists.append(primitive_atom_templates)
 
     del file_name, prot_structure, primitive_atom_templates
+
+    print(f"Proteins read! Primitive types assigned!")
 
     # Collect the accepted atoms and the primitive_sequence
     primitive_sequence, accepted_atoms = list(), list()
@@ -125,6 +129,24 @@ def compare_structures(prot_root_path: Path, save_dir: Path, save_name: str):
 
     del pra_template, resi_number, atom_name
 
+    print(f"Accepted atoms collected!")
+
+    # Collect the contacts that are homo-residue contacts
+    homo_contact_idx_pairs: List[Tuple[int, int]] = list()
+    for idx1 in range(len(template_lists[0])):
+        for idx2 in range(idx1 + 1, len(template_lists[0])):
+
+            resi_id1 = template_lists[0][idx1].atom_source.source_residue
+            resi_id2 = template_lists[0][idx2].atom_source.source_residue
+
+            if resi_id1 == resi_id2:
+                homo_contact_idx_pairs.append((idx1, idx2))
+                homo_contact_idx_pairs.append((idx2, idx1))
+
+    del idx1, idx2, resi_id1, resi_id2
+
+    print(f"Homo-residue contacts ({len(homo_contact_idx_pairs) // 2} in total) collected!")
+
     # Create the distance matrices
     dmx_list: List[np.ndarray] = list()
     for template_list in template_lists:
@@ -135,9 +157,16 @@ def compare_structures(prot_root_path: Path, save_dir: Path, save_name: str):
         dmx = np.array(dmx)
         dmx = dmx[np.newaxis, ...] - dmx[:, np.newaxis, :]
         dmx = np.sqrt(np.sum(dmx ** 2, axis=2))
+
+        # Ban homo-residue contacts
+        for idx1, idx2 in homo_contact_idx_pairs:
+            dmx[idx1][idx2] = float("inf")
+
         dmx_list.append(dmx)
 
-    del template_list, pra_template, dmx
+    del idx1, idx2, template_list, pra_template, dmx
+
+    print(f"Distance matrices created! Starting LoCoHD calculations...")
 
     # Calculate lchd mean and std values
     n_of_structures = len(dmx_list)

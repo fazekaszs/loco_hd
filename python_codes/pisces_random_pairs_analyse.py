@@ -18,6 +18,7 @@ def main():
     data_source = "results_uniform-3-10_only-hetero-contacts.pickle"
     # data_source = "results_uniform-3-10_all-contacts.pickle"
     # data_source = "results_kumaraswamy-3-10-2-5_only-hetero-contacts.pickle"
+    data_source = "results_kumaraswamy-3-10-2-5_only-hetero-contacts_coarse.pickle"
 
     out_str += f"Opening file: \"{data_source}\" at \"{workdir}\"\n"
 

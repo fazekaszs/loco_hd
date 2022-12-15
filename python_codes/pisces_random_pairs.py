@@ -1,11 +1,14 @@
+import json
+import shutil
 import math
 import os
 import random
 import pickle
 import numpy as np
+import datetime
 
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 from time import time
 from scipy import stats
 
@@ -16,33 +19,63 @@ from loco_hd import LoCoHD, PrimitiveAtom
 from atom_converter_utils import PrimitiveAssigner, PrimitiveAtomTemplate
 
 
-def from_pra_template(pra_template: PrimitiveAtomTemplate, model: Model) -> PrimitiveAtom:
+def get_anchors_and_primitive_atoms(pra_templates: List[PrimitiveAtomTemplate],
+                                    model: Model) -> Tuple[List[int], List[PrimitiveAtom]]:
 
-    resi_id = pra_template.atom_source.source_residue
-    resi_name = model[resi_id[2]][resi_id[3]].resname
-    pra_source = f"{resi_id[2]}/{resi_id[3][1]}-{resi_name}"
-    return PrimitiveAtom(pra_template.primitive_type, pra_source, pra_template.coordinates)
+    anchors, primitive_atoms = list(), list()
+    for idx, pra_template in enumerate(pra_templates):
+
+        resi_id = pra_template.atom_source.source_residue
+        resi_name = model[resi_id[2]][resi_id[3]].resname
+        pra_source = f"{resi_id[2]}/{resi_id[3][1]}-{resi_name}"
+        current_pra = PrimitiveAtom(pra_template.primitive_type, pra_source, pra_template.coordinates)
+        primitive_atoms.append(current_pra)
+
+        if pra_template.atom_source.source_atom == ["C", ]:
+            anchors.append(idx)
+
+    return anchors, primitive_atoms
 
 
 def main():
 
-    random.seed(1994)
-
+    # Parameters
+    current_time = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    output_filename = "locohd_data.pisces"
+    workdir_target = Path("workdir/pisces")
+    assigner_config_path = Path("primitive_typings/coarse_grained.config.json")
     pisces_path = Path("/home/fazekaszs/PycharmProjects/databases/pisces_220222")
-    save_path = Path("workdir/pisces")
-
-    primitive_assigner = PrimitiveAssigner(Path("primitive_typings/all_atom_with_centroid.config.json"))
-
-    # out_file_name = "results_uniform-3-10_only-hetero-contacts.pickle"
-    # out_file_name = "results_uniform-3-10_all-contacts.pickle"
-    out_file_name = "results_kumaraswamy-3-10-2-5_only-hetero-contacts.pickle"
-
-    lchd = LoCoHD(primitive_assigner.all_primitive_types, ("kumaraswamy", [3, 10, 2, 5]))
+    random_seed = 1994
+    weight_function = ("kumaraswamy", [3, 10, 2, 5])
     only_hetero_contacts = True
     upper_cutoff = 10
 
+    # Create working directory
+    workdir_path = workdir_target / f"run_{current_time}"
+    if os.path.exists(workdir_path):
+        raise Exception(f"Workdir at {workdir_path} already exists!")
+    else:
+        os.mkdir(workdir_path)
+
+    # Save parameters to the working directory
+    with open(workdir_path / "params.json", "w") as f:
+        json.dump({
+            "assigner_config_path": str(assigner_config_path), "pisces_path": str(pisces_path),
+            "random_seed": random_seed, "weight_function": weight_function,
+            "only_hetero_contacts": only_hetero_contacts, "upper_cutoff": upper_cutoff
+        }, f)
+
+    # Save the assigner config to the working directory
+    shutil.copyfile(assigner_config_path, workdir_path / "assigner_config.json")
+
+    # Initialize the assigner and locohd
+    primitive_assigner = PrimitiveAssigner(assigner_config_path)
+    lchd = LoCoHD(primitive_assigner.all_primitive_types, weight_function)
+
+    # Collect the PDB file names
     pdb_files: List[str] = os.listdir(pisces_path)
     pdb_files = list(filter(lambda x: x.endswith(".pdb"), pdb_files))
+    random.seed(random_seed)
     random.shuffle(pdb_files)
 
     time_per_anchor_list = list()
@@ -60,11 +93,8 @@ def main():
         pra_templates1 = primitive_assigner.assign_primitive_structure(protein1)
         pra_templates2 = primitive_assigner.assign_primitive_structure(protein2)
 
-        primitive_atoms1 = list(map(lambda x: from_pra_template(x, protein1), pra_templates1))
-        primitive_atoms2 = list(map(lambda x: from_pra_template(x, protein2), pra_templates2))
-
-        anchors1 = [idx for idx, pra_template in enumerate(pra_templates1) if pra_template.primitive_type == "Cent"]
-        anchors2 = [idx for idx, pra_template in enumerate(pra_templates2) if pra_template.primitive_type == "Cent"]
+        anchors1, primitive_atoms1 = get_anchors_and_primitive_atoms(pra_templates1, protein1)
+        anchors2, primitive_atoms2 = get_anchors_and_primitive_atoms(pra_templates2, protein2)
 
         if len(anchors1) < len(anchors2):
             anchors2 = random.sample(anchors2, len(anchors1))
@@ -85,15 +115,16 @@ def main():
             pair_id2 = f"{pdb_id2}/{primitive_atoms2[anchor[1]].id}"
             cumulative_results.append((pair_id1, pair_id2, lchd_score))
 
-        if os.path.exists(save_path / out_file_name):
-            with open(save_path / out_file_name, "rb") as f:
+        if os.path.exists(workdir_path / output_filename):
+            with open(workdir_path / output_filename, "rb") as f:
                 cumulative_results += pickle.load(f)
 
-        with open(save_path / out_file_name, "wb") as f:
+        with open(workdir_path / output_filename, "wb") as f:
             pickle.dump(cumulative_results, f)
 
         time_end = time()
 
+        # Time statistics
         len_list.append(len(anchor_pairs))
         time_per_anchor_list.append((time_end - time_start) / len(anchor_pairs))
 

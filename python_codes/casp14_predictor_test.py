@@ -130,7 +130,7 @@ def main():
     # BAKER-experimental: TS403
     # FEIG-R2: TS480
     # Zhang: TS129
-    predictor_key = "TS427"
+    predictor_key = "TS129"
 
     lchd = LoCoHD(PRIMITIVE_TYPES + ["Cent", ], ("uniform", [3, 10]))
     lddt_tars_path = Path("/home/fazekaszs/CoreDir/PhD/PDB/casp14/lDDTs")

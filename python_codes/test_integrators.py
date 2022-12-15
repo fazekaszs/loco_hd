@@ -15,6 +15,7 @@ def main():
         ("uniform", [3., 7.]),
         ("kumaraswamy", [0., 5., 2., 5.]),
         ("kumaraswamy", [3., 7., 2., 2.]),
+        ("kumaraswamy", [3., 10., 2., 5.]),
     ]
 
     x_delta = 0.01
