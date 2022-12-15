@@ -4,8 +4,9 @@ import matplotlib.pyplot as plt
 
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.patches import Rectangle
+from scipy.stats import spearmanr
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Any
 from time import time
 
 from Bio.PDB.PDBParser import PDBParser
@@ -33,16 +34,49 @@ class AtomSelector(Select):
         return False
 
 
-def plot_result(chain_chain_dmx_mean: np.ndarray,
-                lchd_by_atom: np.ndarray,
-                dmx_lchd_min: float,
-                dmx_lchd_max: float,
-                save_dir: Path,
-                save_name: str):
+def calculate_rmsd(templates1: List[PrimitiveAtomTemplate], templates2: List[PrimitiveAtomTemplate]) -> float:
+
+    # Calculates the optimal 3D alignment using the Kabsch algorithm:
+    # https://en.wikipedia.org/wiki/Kabsch_algorithm
+    # https://towardsdatascience.com/the-definitive-procedure-for-aligning-two-sets-of-3d-points-with-the-kabsch-algorithm-a7ec2126c87e
+
+    coords1 = list(map(lambda x: x.coordinates, templates1))
+    coords1 = np.array(coords1)
+    coords1 -= np.mean(coords1, axis=0, keepdims=True)
+
+    coords2 = list(map(lambda x: x.coordinates, templates2))
+    coords2 = np.array(coords2)
+    coords2 -= np.mean(coords2, axis=0, keepdims=True)
+
+    cov_mx = coords1.T @ coords2
+    mx_u, mx_s, mx_vt = np.linalg.svd(cov_mx)
+    inner_mx = np.eye(3)
+    inner_mx[2, 2] = 1 if np.linalg.det(mx_u @ mx_vt) > 0 else -1
+
+    rot_mx = mx_u @ inner_mx @ mx_vt
+
+    new_coords1 = coords1 @ rot_mx
+
+    rmsd = np.sum((new_coords1 - coords2) ** 2, axis=1)
+    rmsd = np.sqrt(np.mean(rmsd))
+
+    return rmsd
+
+
+def plot_result(in_dict: Dict[str, Any]):
+
+    rmsd_dmx: np.ndarray = in_dict["rmsd_dmx"]
+    lchd_dmx: np.ndarray = in_dict["lchd_dmx"]
+    lchd_by_atom: np.ndarray = in_dict["lchd_by_atom"]
+    dmx_lchd_min: float = in_dict["dmx_lchd_min"]
+    dmx_lchd_max: float = in_dict["dmx_lchd_max"]
+    save_dir: Path = in_dict["save_dir"]
+    save_name: str = in_dict["save_name"]
 
     fig, ax = plt.subplots(1, 2)
 
-    im = ax[0].imshow(chain_chain_dmx_mean, cmap="coolwarm", vmin=dmx_lchd_min, vmax=dmx_lchd_max)
+    # Showing the structure - structure distance matrix
+    im = ax[0].imshow(lchd_dmx, cmap="coolwarm", vmin=dmx_lchd_min, vmax=dmx_lchd_max)
     divider = make_axes_locatable(ax[0])
     cax = divider.append_axes("right", size="5%", pad=0.05)
     cbar = fig.colorbar(im, cax=cax)
@@ -53,6 +87,7 @@ def plot_result(chain_chain_dmx_mean: np.ndarray,
     ax[0].set_yticks([])
     ax[0].set_title("LoCoHD Score of\nthe Structure Pairs")
 
+    # Showing the atomic LoCoHD scores
     ax[1].plot(np.sort(lchd_by_atom), c="black")
     ax[1].set_xlabel("Rank of atom by sorted LoCoHD score")
     ax[1].set_ylabel("LoCoHD score")
@@ -71,6 +106,7 @@ def plot_result(chain_chain_dmx_mean: np.ndarray,
     plot_ticks = np.arange(atom_lchd_min, atom_lchd_max, (atom_lchd_max - atom_lchd_min) / 10)
     ax[1].set_yticks(plot_ticks, labels=[f"{tick:.1%}" for tick in plot_ticks])
 
+    # Adding the statistics as a legend
     atom_lchd_median = np.median(lchd_by_atom)
     legend_labels = list()
     legend_labels.append(f"Min = {atom_lchd_min:.1%}")
@@ -87,8 +123,30 @@ def plot_result(chain_chain_dmx_mean: np.ndarray,
     plt.tight_layout()
     fig.savefig(save_dir / f"{save_name}_plot.png", dpi=300)
 
+    # Plotting the LoCoHD - RMSD relation
+    # This goes to a new plot!
+    fig, ax = plt.subplots()
 
-def compare_structures(prot_root_path: Path, save_dir: Path, save_name: str):
+    tril_idxs = np.tril_indices(len(rmsd_dmx), k=-1)
+    tril_lhcd_dmx = lchd_dmx[tril_idxs]
+    tril_rmsd_dmx = rmsd_dmx[tril_idxs]
+    ax.scatter(tril_lhcd_dmx, tril_rmsd_dmx)
+    ax.set_xlabel("LoCoHD score")
+    ax.set_ylabel("RMSD / $\\AA$")
+
+    spr = spearmanr(tril_rmsd_dmx, tril_lhcd_dmx).correlation
+    ax.set_title(f"Comparison of structure-structure\nLoCoHD and RMSD values (SpR: {spr:.5f})")
+
+    tril_lhcd_dmx_min = np.min(tril_lhcd_dmx)
+    tril_lhcd_dmx_max = np.max(tril_lhcd_dmx)
+    plot_ticks = np.arange(tril_lhcd_dmx_min, tril_lhcd_dmx_max, (tril_lhcd_dmx_max - tril_lhcd_dmx_min) / 10)
+    ax.set_xticks(plot_ticks, labels=[f"{tick:.1%}" for tick in plot_ticks])
+
+    plt.tight_layout()
+    fig.savefig(save_dir / f"{save_name}_with_rmsd.png", dpi=300)
+
+
+def compare_structures(prot_root_path: Path, save_dir: Path, save_name: str) -> Dict[str, Any]:
 
     print(f"Starting {save_name}...")
 
@@ -113,9 +171,18 @@ def compare_structures(prot_root_path: Path, save_dir: Path, save_name: str):
         primitive_atom_templates = primitive_assigner.assign_primitive_structure(prot_structure)
         template_lists.append(primitive_atom_templates)
 
+    print(f"Proteins read! Primitive types assigned!")
+
     del file_name, prot_structure, primitive_atom_templates
 
-    print(f"Proteins read! Primitive types assigned!")
+    # Calculate the RMSD matrix between the structure pairs
+    rmsd_dmx = np.zeros((len(template_lists), len(template_lists)))
+    for idx1 in range(len(template_lists)):
+        for idx2 in range(idx1 + 1, len(template_lists)):
+            rmsd_dmx[idx1, idx2] = calculate_rmsd(template_lists[idx1], template_lists[idx2])
+            rmsd_dmx[idx2, idx1] = rmsd_dmx[idx1, idx2]
+
+    print(f"RMSD matrix created!")
 
     # Collect the accepted atoms and the primitive_sequence
     primitive_sequence, accepted_atoms = list(), list()
@@ -170,32 +237,42 @@ def compare_structures(prot_root_path: Path, save_dir: Path, save_name: str):
 
     # Calculate lchd mean and std values
     n_of_structures = len(dmx_list)
-    chain_chain_mean_locohd_mx = np.zeros((n_of_structures, n_of_structures))
+    lchd_dmx = np.zeros((n_of_structures, n_of_structures))
     runtimes = list()
     lchd_by_atom = list()
     for idx1 in range(n_of_structures):
         for idx2 in range(idx1 + 1, n_of_structures):
 
             start_time = time()
-            lchd_all = lchd.from_dmxs(primitive_sequence,
-                                      primitive_sequence,
-                                      dmx_list[idx1],
-                                      dmx_list[idx2])
+
+            # The magic happens here
+            lchd_all = lchd.from_dmxs(
+                primitive_sequence,
+                primitive_sequence,
+                dmx_list[idx1],
+                dmx_list[idx2]
+            )
+
             end_time = time()
             runtimes.append(end_time - start_time)
-            lchd_by_atom.append(lchd_all)
 
-            chain_chain_mean_locohd_mx[idx1, idx2] = chain_chain_mean_locohd_mx[idx2, idx1] = np.mean(lchd_all)
+            lchd_by_atom.append(lchd_all)
+            lchd_dmx[idx1, idx2] = lchd_dmx[idx2, idx1] = np.mean(lchd_all)
 
     lchd_by_atom = np.mean(lchd_by_atom, axis=0)
     print(f"Mean time per run: {np.mean(runtimes):.5f} s")
     print(f"Std of runtimes: {np.std(runtimes):.10f} s")
     print(f"Total runtime: {np.sum(runtimes):.5f} s")
 
-    sorted_dmx_mask = np.argsort(np.mean(chain_chain_mean_locohd_mx, axis=0))
-    chain_chain_mean_locohd_mx = chain_chain_mean_locohd_mx[:, sorted_dmx_mask][sorted_dmx_mask, :]
+    # Sort the rows and columns of the locohd and rmsd distance matrices
+    sorted_dmx_mask = np.argsort(np.mean(lchd_dmx, axis=0))
+    lchd_dmx = lchd_dmx[:, sorted_dmx_mask][sorted_dmx_mask, :]
+    rmsd_dmx = rmsd_dmx[:, sorted_dmx_mask][sorted_dmx_mask, :]
 
     # Save b-factor labelled structure
+    # TODO: This doesn't work if the primitive typing is coarse gained or there are primitive atoms
+    #  that do not exist in the original structure! We need a better saving technique, possibly
+    #  through the PrimitiveAssigner instance!
     pdb_io = PDBIO()
     prot_structure = PDBParser(QUIET=True).get_structure("", prot_root_path / all_files[0])
     prot_chain = prot_structure[0].child_list[0]
@@ -206,7 +283,7 @@ def compare_structures(prot_root_path: Path, save_dir: Path, save_name: str):
     pdb_io.set_structure(prot_structure)
     pdb_io.save(str(save_dir / f"{save_name}_blabelled.pdb"), select=AtomSelector(accepted_atoms))
 
-    return chain_chain_mean_locohd_mx, lchd_by_atom
+    return {"rmsd_dmx": rmsd_dmx, "lchd_dmx": lchd_dmx, "lchd_by_atom": lchd_by_atom}
 
 
 def main():
@@ -221,20 +298,32 @@ def main():
         ("/home/fazekaszs/CoreDir/PhD/PDB/H5/321", "h5_321"),
     ]
 
-    all_chain_chain_dmxs, all_lchd_by_atom = list(), list()
+    rmsd_dmxs, lchd_dmxs, lchd_by_atom = list(), list(), list()
 
     for prot_root_path, prot_name in paths_and_names:
 
-        temp_dmx, temp_atom_lchds = compare_structures(Path(prot_root_path), save_dir, prot_name)
-        all_chain_chain_dmxs.append(temp_dmx)
-        all_lchd_by_atom.append(temp_atom_lchds)
+        out_dict = compare_structures(Path(prot_root_path), save_dir, prot_name)
+        rmsd_dmxs.append(out_dict["rmsd_dmx"])
+        lchd_dmxs.append(out_dict["lchd_dmx"])
+        lchd_by_atom.append(out_dict["lchd_by_atom"])
 
     print("Starting to plot!")
-    dmx_lchd_min = np.min(all_chain_chain_dmxs)
-    dmx_lchd_max = np.max(all_chain_chain_dmxs)
+    dmx_lchd_min = np.min(lchd_dmxs)
+    dmx_lchd_max = np.max(lchd_dmxs)
 
-    for chain_chain_dmx, lchd_by_atom, (_, prot_name) in zip(all_chain_chain_dmxs, all_lchd_by_atom, paths_and_names):
-        plot_result(chain_chain_dmx, lchd_by_atom, dmx_lchd_min, dmx_lchd_max, save_dir, prot_name)
+    for idx in range(len(paths_and_names)):
+
+        plot_result_input = {
+            "rmsd_dmx": rmsd_dmxs[idx],
+            "lchd_dmx": lchd_dmxs[idx],
+            "lchd_by_atom": lchd_by_atom[idx],
+            "dmx_lchd_min": dmx_lchd_min,
+            "dmx_lchd_max": dmx_lchd_max,
+            "save_dir": save_dir,
+            "save_name": paths_and_names[idx][1]
+        }
+
+        plot_result(plot_result_input)
 
 
 if __name__ == "__main__":
