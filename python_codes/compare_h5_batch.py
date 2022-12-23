@@ -159,6 +159,7 @@ def compare_structures(prot_root_path: Path, save_dir: Path, save_name: str) -> 
     # Collect all the filenames in the directory
     all_files: List[str] = os.listdir(prot_root_path)
     all_files = list(filter(lambda x: x.endswith(".pdb"), all_files))
+    all_files = sorted(all_files)
 
     print(f"Found {len(all_files)} files!")
 
@@ -237,6 +238,7 @@ def compare_structures(prot_root_path: Path, save_dir: Path, save_name: str) -> 
 
     # Calculate lchd mean and std values
     n_of_structures = len(dmx_list)
+    n_of_comparisons = n_of_structures * (n_of_structures - 1) / 2
     lchd_dmx = np.zeros((n_of_structures, n_of_structures))
     runtimes = list()
     lchd_by_atom = list()
@@ -259,6 +261,11 @@ def compare_structures(prot_root_path: Path, save_dir: Path, save_name: str) -> 
             lchd_by_atom.append(lchd_all)
             lchd_dmx[idx1, idx2] = lchd_dmx[idx2, idx1] = np.mean(lchd_all)
 
+            print(f"\rCompletion: {len(runtimes) / n_of_comparisons:.1%}", end="")
+
+    print()
+
+    # Printing time statistics
     lchd_by_atom = np.mean(lchd_by_atom, axis=0)
     print(f"Mean time per run: {np.mean(runtimes):.5f} s")
     print(f"Std of runtimes: {np.std(runtimes):.10f} s")
@@ -270,18 +277,13 @@ def compare_structures(prot_root_path: Path, save_dir: Path, save_name: str) -> 
     rmsd_dmx = rmsd_dmx[:, sorted_dmx_mask][sorted_dmx_mask, :]
 
     # Save b-factor labelled structure
-    # TODO: This doesn't work if the primitive typing is coarse gained or there are primitive atoms
-    #  that do not exist in the original structure! We need a better saving technique, possibly
-    #  through the PrimitiveAssigner instance!
-    pdb_io = PDBIO()
-    prot_structure = PDBParser(QUIET=True).get_structure("", prot_root_path / all_files[0])
-    prot_chain = prot_structure[0].child_list[0]
+    b_labelled_pdb = primitive_assigner.generate_primitive_pdb(template_lists[0], b_labels=lchd_by_atom)
 
-    for lchd_score, (resi_number, atom_name) in zip(lchd_by_atom, accepted_atoms):
-        prot_chain[resi_number][atom_name].bfactor = 100 * lchd_score
-            
-    pdb_io.set_structure(prot_structure)
-    pdb_io.save(str(save_dir / f"{save_name}_blabelled.pdb"), select=AtomSelector(accepted_atoms))
+    full_save_name = save_name + "_blabelled.pdb"
+    with open(save_dir / full_save_name, "w") as f:
+        f.write(b_labelled_pdb)
+
+    print(f"B-labelled primitive structure saved as {full_save_name} based on the template {all_files[0]}!")
 
     return {"rmsd_dmx": rmsd_dmx, "lchd_dmx": lchd_dmx, "lchd_by_atom": lchd_by_atom}
 
@@ -296,6 +298,8 @@ def main():
         ("/home/fazekaszs/CoreDir/PhD/PDB/H5/299", "h5_299"),
         ("/home/fazekaszs/CoreDir/PhD/PDB/H5/310", "h5_310"),
         ("/home/fazekaszs/CoreDir/PhD/PDB/H5/321", "h5_321"),
+        # ("./workdir/pdb_files/PED00075e000", "PED00075e000"),
+        # ("./workdir/pdb_files/PED00072e000", "PED00072e000"),
     ]
 
     rmsd_dmxs, lchd_dmxs, lchd_by_atom = list(), list(), list()

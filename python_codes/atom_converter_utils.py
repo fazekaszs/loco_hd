@@ -25,6 +25,7 @@ class PrimitiveAtomSource:
     """
 
     source_residue: ResiFullIdType
+    source_residue_name: str
     source_atom: List[str]
 
 
@@ -144,6 +145,7 @@ class PrimitiveAssigner:
         for resi in structure.get_residues():
 
             resi_id = resi.full_id
+            resi_name = resi.resname
 
             # CATEGORY *:*
             full_centroid_coord = None
@@ -152,7 +154,7 @@ class PrimitiveAssigner:
                 full_centroid_coord = resi.center_of_mass(geometric=True)
                 for primitive_type in self.converter_dict["*:*"]:
 
-                    pra_source = PrimitiveAtomSource(resi_id, list())
+                    pra_source = PrimitiveAtomSource(resi_id, resi_name, list())
                     pra_template = PrimitiveAtomTemplate(primitive_type, full_centroid_coord, pra_source)
                     out.append(pra_template)
 
@@ -171,7 +173,7 @@ class PrimitiveAssigner:
 
                     partial_centroid_coord = np.mean(partial_centroid_coord, axis=0)
 
-                    pra_source = PrimitiveAtomSource(resi_id, atom_names)
+                    pra_source = PrimitiveAtomSource(resi_id, resi_name, atom_names)
                     pra_template = PrimitiveAtomTemplate(primitive_type, partial_centroid_coord, pra_source)
                     out.append(pra_template)
 
@@ -182,7 +184,7 @@ class PrimitiveAssigner:
                     warn(f"Warning: no atom named {atom_name} in residue {resi_id} ({resi.resname})!")
                     continue
 
-                pra_source = PrimitiveAtomSource(resi_id, [atom_name, ])
+                pra_source = PrimitiveAtomSource(resi_id, resi_name, [atom_name, ])
                 pra_template = PrimitiveAtomTemplate(primitive_type, resi[atom_name].coord, pra_source)
                 out.append(pra_template)
 
@@ -194,7 +196,7 @@ class PrimitiveAssigner:
 
                 for primitive_type in self.converter_dict["X:*"][resi.resname]:
 
-                    pra_source = PrimitiveAtomSource(resi_id, list())
+                    pra_source = PrimitiveAtomSource(resi_id, resi_name, list())
                     pra_template = PrimitiveAtomTemplate(primitive_type, full_centroid_coord, pra_source)
                     out.append(pra_template)
 
@@ -215,7 +217,7 @@ class PrimitiveAssigner:
 
                         partial_centroid_coord = np.mean(partial_centroid_coord, axis=0)
 
-                        pra_source = PrimitiveAtomSource(resi_id, atom_names)
+                        pra_source = PrimitiveAtomSource(resi_id, resi_name, atom_names)
                         pra_template = PrimitiveAtomTemplate(primitive_type, partial_centroid_coord, pra_source)
                         out.append(pra_template)
 
@@ -228,15 +230,15 @@ class PrimitiveAssigner:
                         warn(f"Warning: no atom named {atom_name} in residue {resi_id} ({resi.resname})!")
                         continue
 
-                    pra_source = PrimitiveAtomSource(resi_id, [atom_name, ])
+                    pra_source = PrimitiveAtomSource(resi_id, resi_name, [atom_name, ])
                     pra_template = PrimitiveAtomTemplate(primitive_type, resi[atom_name].coord, pra_source)
                     out.append(pra_template)
 
         return out
 
-    def generate_primitive_pdb(self, structure: AtomHolders):
+    def generate_primitive_pdb(self, primitive_structure: List[PrimitiveAtomTemplate],
+                               b_labels: Union[None, List[float], np.ndarray] = None):
 
-        primitive_structure = self.assign_primitive_structure(structure)
         pdb_str = ""
 
         last_resi_id = None
@@ -244,6 +246,8 @@ class PrimitiveAssigner:
         for primitive_atom_idx, pra_template in enumerate(primitive_structure):
 
             resi_id = pra_template.atom_source.source_residue
+            resi_name = pra_template.atom_source.source_residue_name
+            b_factor = 1. if b_labels is None else b_labels[primitive_atom_idx]
             coords = pra_template.coordinates
 
             if resi_id != last_resi_id:
@@ -251,13 +255,6 @@ class PrimitiveAssigner:
                 last_resi_id = resi_id
 
             atom_name = chr(65 + self.all_primitive_types.index(pra_template.primitive_type))
-
-            if type(structure) == Structure:
-                resi_name = structure[resi_id[1]][resi_id[2]][resi_id[3]].resname
-            elif type(structure) == Model:
-                resi_name = structure[resi_id[2]][resi_id[3]].resname
-            else:
-                resi_name = structure[resi_id[3]].resname
 
             pdb_str += f"ATOM  "  # 1-6
             pdb_str += f"{primitive_atom_idx + 1: >5} "  # Atom idx + space, 7-12
@@ -269,7 +266,7 @@ class PrimitiveAssigner:
             pdb_str += f"    "  # Insertion code + 3 spaces, 27-30
             pdb_str += f"{coords[0]:8.3f}{coords[1]:8.3f}{coords[2]:8.3f}"  # x, y, z coordinates, 31-54
             pdb_str += f"{1.:6.2f}"  # Occupancy, 55-60
-            pdb_str += f"{1.:6.2f}          "  # Temp factor + 10 spaces, 61-76
+            pdb_str += f"{b_factor:6.2f}          "  # Temp factor + 10 spaces, 61-76
             pdb_str += f"Pr"  # Element symbol, 77-78
             pdb_str += f"  "  # Charge, 79-80
             pdb_str += f"\n"

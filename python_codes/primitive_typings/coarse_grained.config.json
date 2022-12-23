@@ -8,7 +8,8 @@
     ],
     "Aro": [
         "PHE:CG-CZ", "TYR:CG-CZ",
-        "TRP:CD2-CH2", "TRP:CG-CD1-CD2-NE1-CE2"
+        "TRP:CD2-CH2", "TRP:CG-CD1-CD2-NE1-CE2",
+        "HIS:CG-ND1-CD2-CE1-NE2"
     ],
     "Ali": [
         "ALA:CB",
