@@ -92,8 +92,8 @@ def create_plot(key: str, lchd_scores: List[float], lddt_scores: List[float], sp
     legend_handles = [Rectangle((0, 0), 1, 1, fc="white", ec="white", lw=0, alpha=0), ] * 3
     legend_labels = list()
     legend_labels.append(f"SpR = {spr:.5f}")
-    legend_labels.append(f"Avg LoCoHD = {np.mean(lchd_scores):.1%}")
-    legend_labels.append(f"Avg lDDT = {np.mean(lddt_scores):.1%}")
+    legend_labels.append(f"mean LoCoHD = {np.mean(lchd_scores):.1%}")
+    legend_labels.append(f"mean lDDT = {np.mean(lddt_scores):.1%}")
     ax.legend(legend_handles, legend_labels,
               loc="upper right", fontsize="small", fancybox=True,
               framealpha=0.7, handlelength=0, handletextpad=0)

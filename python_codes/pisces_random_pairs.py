@@ -19,6 +19,11 @@ from loco_hd import LoCoHD, PrimitiveAtom
 from atom_converter_utils import PrimitiveAssigner, PrimitiveAtomTemplate
 
 
+def is_anchor_atom(pra_template: PrimitiveAtomTemplate) -> bool:
+
+    return len(pra_template.atom_source.source_atom) == 0
+
+
 def get_anchors_and_primitive_atoms(pra_templates: List[PrimitiveAtomTemplate],
                                     model: Model) -> Tuple[List[int], List[PrimitiveAtom]]:
 
@@ -31,7 +36,7 @@ def get_anchors_and_primitive_atoms(pra_templates: List[PrimitiveAtomTemplate],
         current_pra = PrimitiveAtom(pra_template.primitive_type, pra_source, pra_template.coordinates)
         primitive_atoms.append(current_pra)
 
-        if pra_template.atom_source.source_atom == ["C", ]:
+        if is_anchor_atom(pra_template):
             anchors.append(idx)
 
     return anchors, primitive_atoms
@@ -43,10 +48,11 @@ def main():
     current_time = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
     output_filename = "locohd_data.pisces"
     workdir_target = Path("workdir/pisces")
-    assigner_config_path = Path("primitive_typings/coarse_grained.config.json")
+    assigner_config_path = Path("primitive_typings/all_atom_with_centroid.config.json")
     pisces_path = Path("/home/fazekaszs/PycharmProjects/databases/pisces_220222")
     random_seed = 1994
-    weight_function = ("kumaraswamy", [3, 10, 2, 5])
+    max_n_of_anchors = 1500
+    weight_function = ("uniform", [3, 10, ])
     only_hetero_contacts = True
     upper_cutoff = 10
 
@@ -87,6 +93,9 @@ def main():
         path1 = str(pisces_path / pdb_files[pdb_idx])
         path2 = str(pisces_path / pdb_files[pdb_idx + 1])
 
+        print(f"Starting {pdb_files[pdb_idx]} and {pdb_files[pdb_idx + 1]} - ", end="")
+
+        # Load pdb files, assign primitive structures, and get the anchors and primitive atoms.
         protein1: Model = PDBParser(QUIET=True).get_structure("", path1)[0]
         protein2: Model = PDBParser(QUIET=True).get_structure("", path2)[0]
 
@@ -96,6 +105,7 @@ def main():
         anchors1, primitive_atoms1 = get_anchors_and_primitive_atoms(pra_templates1, protein1)
         anchors2, primitive_atoms2 = get_anchors_and_primitive_atoms(pra_templates2, protein2)
 
+        # Pair anchor indices randomly together.
         if len(anchors1) < len(anchors2):
             anchors2 = random.sample(anchors2, len(anchors1))
         else:
@@ -103,8 +113,16 @@ def main():
 
         anchor_pairs = [(x, y) for x, y in zip(anchors1, anchors2)]
 
+        # Chop down the list of anchor indices if it exceeds an upper limit.
+        anchor_pairs = anchor_pairs[:max_n_of_anchors] if len(anchor_pairs) > max_n_of_anchors else anchor_pairs
+
+        print(f"Number of anchors: {len(anchor_pairs)} - ", end="")
+
+        # Start LoCoHD calculations.
         lchd_scores = lchd.from_primitives(primitive_atoms1, primitive_atoms2,
                                            anchor_pairs, only_hetero_contacts, upper_cutoff)
+
+        print(f"Calculation #{pdb_idx + 1} OK! Avg. LoCoHD: {np.mean(lchd_scores):.2%}")
 
         pdb_id1 = pdb_files[pdb_idx].replace(".pdb", "")
         pdb_id2 = pdb_files[pdb_idx + 1].replace(".pdb", "")
@@ -121,6 +139,8 @@ def main():
 
         with open(workdir_path / output_filename, "wb") as f:
             pickle.dump(cumulative_results, f)
+
+        print("Cumulative results successfully saved!")
 
         time_end = time()
 
