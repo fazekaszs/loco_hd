@@ -3,12 +3,20 @@ import tarfile
 import os
 import warnings
 import pickle
+
 from pathlib import Path
+from typing import Dict
+
 from Bio.PDB.PDBParser import PDBParser
 from Bio.PDB.PDBExceptions import PDBConstructionWarning
 from Bio.PDB.Entity import Entity
 from Bio.PDB.Structure import Structure
 from Bio.PDB.Atom import Atom
+
+# Set the necessary constants. The available predictor keys are the following:
+# AF2: TS427, BAKER: TS473, BAKER-experimental: TS403, FEIG-R2: TS480, Zhang: TS129
+PREDICTOR_KEY = "TS427"
+TARFILE_ROOT = Path("/home/fazekaszs/CoreDir/PhD/PDB/casp14")
 
 
 class InLinePDBParser(PDBParser):
@@ -43,25 +51,20 @@ def filter_atoms(ref_structure: Entity, structure: Entity):
 
 def main():
 
-    # AF2: TS427
-    # BAKER: TS473
-    # BAKER-experimental: TS403
-    # FEIG-R2: TS480
-    # Zhang: TS129
-    predictor_key = "TS129"
-
     # Extract the file names.
-    tarfile_root = Path("/home/fazekaszs/CoreDir/PhD/PDB/casp14")
-    tarfile_names = list(filter(lambda x: x.endswith(".tar.gz"), os.listdir(tarfile_root)))
+    tarfile_names = list(filter(lambda x: x.endswith(".tar.gz"), os.listdir(TARFILE_ROOT)))
 
     true_structures_tar = list(filter(lambda x: "casp14" in x, tarfile_names))
     [tarfile_names.remove(file_name) for file_name in true_structures_tar]
 
     # Read all the true structures.
-    all_structures = dict()
+    # First key in all_structures is the target structure's name (like TS1030),
+    #  second key is either "true" (referring to the experimental structure) or
+    #  a str number ("1"..."5", referring to the predicted structure).
+    all_structures: Dict[str, Dict[str, Structure]] = dict()
     file_name: str
     for file_name in true_structures_tar:
-        with tarfile.open(tarfile_root / file_name) as tf:
+        with tarfile.open(TARFILE_ROOT / file_name) as tf:
             tf_members = tf.getmembers()
             for member in tf_members:
                 f = tf.extractfile(member)
@@ -71,23 +74,25 @@ def main():
 
                     member_name = member.name.replace(".pdb", "")
 
-                    all_structures[member_name] = [content, ]
-                    print(f"True member name: {member_name}, "
-                          f"# of atoms: {len(list(content.get_atoms()))}, "
-                          f"# of structures so far: {len(all_structures)}")
+                    all_structures[member_name] = {"true": content, }
+
+                    print(f"True member name: {member_name},", end=" ")
+                    print(f"# of atoms: {len(list(content.get_atoms()))},", end=" ")
+                    print(f"# of structures so far: {len(all_structures)}")
+
                     f.close()
 
     # Read the predictor predictions.
     file_name: str
     for file_name in tarfile_names:
-        with tarfile.open(tarfile_root / file_name) as tf:
+        with tarfile.open(TARFILE_ROOT / file_name) as tf:
             tf_members = tf.getmembers()
-            tf_members = list(filter(lambda m: predictor_key in m.name, tf_members))
+            tf_members = list(filter(lambda m: PREDICTOR_KEY in m.name, tf_members))
             for member in tf_members:
 
                 member_name = member.name.split("/")[1]
-                member_name = member_name.replace(predictor_key, "")
-                member_name = member_name.split("_")[0]
+                member_name = member_name.replace(PREDICTOR_KEY, "")
+                member_name, member_id = member_name.split("_")
 
                 if member_name not in all_structures:
                     continue
@@ -100,27 +105,30 @@ def main():
 
                 content = codecs.getreader("utf-8")(f).read()
                 content = InLinePDBParser(QUIET=True).from_str("", content)
-                filter_atoms(all_structures[member_name][0], content)
+                filter_atoms(all_structures[member_name]["true"], content)
 
                 n_of_atoms = len(list(content.get_atoms()))
-                n_of_atoms_true = len(list(all_structures[member_name][0].get_atoms()))
+                n_of_atoms_true = len(list(all_structures[member_name]["true"].get_atoms()))
 
                 if n_of_atoms != n_of_atoms_true:
                     f.close()
                     continue
 
-                all_structures[member_name].append(content)
-                print(f"{predictor_key} member name: {member_name}, "
-                      f"# of atoms: {n_of_atoms} (vs {n_of_atoms_true}), "
-                      f"# of structures in member: {len(all_structures[member_name])}")
+                all_structures[member_name][member_id] = content
+
+                print(f"{PREDICTOR_KEY} member name: {member_name},", end=" ")
+                print(f"member id: {member_id},", end=" ")
+                print(f"# of atoms: {n_of_atoms} (vs {n_of_atoms_true}),", end=" ")
+                print(f"# of structures in member: {len(all_structures[member_name])}")
+
                 f.close()
 
     all_structures = {key: value for key, value in all_structures.items() if len(value) > 1}
 
-    if not os.path.exists(f"./workdir/{predictor_key}_results"):
-        os.mkdir(f"./workdir/{predictor_key}_results")
+    if not os.path.exists(f"./workdir/{PREDICTOR_KEY}_results"):
+        os.mkdir(f"./workdir/{PREDICTOR_KEY}_results")
 
-    with open(f"./workdir/{predictor_key}_results/{predictor_key}_structures.pickle", "wb") as f:
+    with open(f"./workdir/{PREDICTOR_KEY}_results/{PREDICTOR_KEY}_structures.pickle", "wb") as f:
         pickle.dump(all_structures, f)
 
 

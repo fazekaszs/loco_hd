@@ -20,7 +20,7 @@ from atom_converter_utils import PrimitiveAssigner, PrimitiveAtomTemplate
 # Set the necessary paths. The available predictor keys are the following:
 # AF2: TS427, BAKER: TS473, BAKER-experimental: TS403, FEIG-R2: TS480, Zhang: TS129
 LDDT_TARS_PATH = Path("/home/fazekaszs/CoreDir/PhD/PDB/casp14/lDDTs")
-PREDICTOR_KEY = "TS480"
+PREDICTOR_KEY = "TS129"
 WORKDIR = Path(f"./workdir/{PREDICTOR_KEY}_results")
 
 
@@ -113,7 +113,7 @@ def main():
     # The values in the structures dict are lists of structures, where the first structure
     # in the lists is the true structure, and the rest of them are the predicted structures.
     with open(WORKDIR / f"{PREDICTOR_KEY}_structures.pickle", "rb") as f:
-        structures: Dict[str, List[Structure]] = pickle.load(f)
+        structures: Dict[str, Dict[str, Structure]] = pickle.load(f)
 
     # For statistics collection.
     spr_values = list()
@@ -137,12 +137,15 @@ def main():
 
         # Transform the real structure into a list of primitive atoms and get the anchors
         # simultaneously.
-        true_pra_templates = primitive_assigner.assign_primitive_structure(structures[structure_key][0])
+        true_pra_templates = primitive_assigner.assign_primitive_structure(structures[structure_key]["true"])
         anchors = [(idx, idx) for idx, prat in enumerate(true_pra_templates) if prat.primitive_type == "Cent"]
         true_prim_atoms = list(map(prat_to_pra, true_pra_templates))
 
         # For each predicted structure...
-        for pred_idx, structure in enumerate(structures[structure_key][1:]):
+        for pred_id, structure in structures[structure_key].items():
+
+            if pred_id == "true":
+                continue
 
             # Transform the predicted structure.
             pred_pra_templates = primitive_assigner.assign_primitive_structure(structure)
@@ -153,7 +156,7 @@ def main():
 
             # Collecting the lDDT scores.
             lddt_scores = list()
-            key1 = f"{structure_key}{PREDICTOR_KEY}_{pred_idx + 1}"
+            key1 = f"{structure_key}{PREDICTOR_KEY}_{pred_id}"
             for anchor, _ in anchors:
                 key2 = true_prim_atoms[anchor].id
                 lddt_scores.append(lddt_dict[key1][key2])
