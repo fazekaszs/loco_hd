@@ -9,7 +9,7 @@ import numpy as np
 from Bio.PDB.Structure import Structure
 
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Tuple
 from matplotlib.patches import Rectangle
 from scipy.stats import spearmanr
 
@@ -22,6 +22,8 @@ from atom_converter_utils import PrimitiveAssigner, PrimitiveAtomTemplate
 LDDT_TARS_PATH = Path("/home/fazekaszs/CoreDir/PhD/PDB/casp14/lDDTs")
 PREDICTOR_KEY = "TS129"
 WORKDIR = Path(f"./workdir/{PREDICTOR_KEY}_results")
+
+ScoreStatType = Dict[str, Dict[str, Tuple[float, float, float]]]
 
 
 def prat_to_pra(prat: PrimitiveAtomTemplate) -> PrimitiveAtom:
@@ -58,6 +60,83 @@ def read_lddt_values(structure_key: str) -> Dict[str, Dict[str, float]]:
             f.close()
 
     return lddt_dict
+
+
+def get_statistics_str(stat_dict: ScoreStatType) -> str:
+
+    def data_to_table_row(data) -> str:
+        return f"{data[0]} | " + " | ".join(map(lambda x: f"{x:.7f}", data[1:])) + " |\n"
+
+    stat_list = list()
+    for structure_key in stat_dict:
+        for pred_id in stat_dict[structure_key]:
+            stat_list.append((f"{structure_key}_{pred_id}", *stat_dict[structure_key][pred_id]))
+
+    out_str = ""
+
+    # SpR statistics
+    spr_argmedian = np.argsort([x[1] for x in stat_list])[len(stat_list) // 2]
+    spr_argmin = np.argmin([x[1] for x in stat_list])
+    spr_argmax = np.argmax([x[1] for x in stat_list])
+
+    out_str += "## Statistics for the Spearman's rank-Correlation Coefficient\n"
+    out_str += f"- mean: {np.mean([x[1] for x in stat_list]):.5f}\n"
+    out_str += f"- std: {np.std([x[1] for x in stat_list]):.5f}\n\n"
+
+    out_str += "| descriptor | structure | SpR | median LoCoHD | median lDDT |\n"
+    out_str += "| ---------: | :-------: | :-: | :-----------: | :---------: |\n"
+    out_str += f"| median | {data_to_table_row(stat_list[spr_argmedian])}"
+    out_str += f"| min | {data_to_table_row(stat_list[spr_argmin])}"
+    out_str += f"| max | {data_to_table_row(stat_list[spr_argmax])}\n"
+
+    # LoCoHD statistics
+    lchd_argmedian = np.argsort([x[2] for x in stat_list])[len(stat_list) // 2]
+    lchd_argmin = np.argmin([x[2] for x in stat_list])
+    lchd_argmax = np.argmax([x[2] for x in stat_list])
+
+    out_str += "## Statistics for the Median LoCoHD Values\n"
+    out_str += f"- mean: {np.mean([x[2] for x in stat_list]):.5f}\n"
+    out_str += f"- std: {np.std([x[2] for x in stat_list]):.5f}\n\n"
+
+    out_str += "| descriptor | structure | SpR | median LoCoHD | median lDDT |\n"
+    out_str += "| ---------: | :-------: | :-: | :-----------: | :---------: |\n"
+    out_str += f"| median | {data_to_table_row(stat_list[lchd_argmedian])}"
+    out_str += f"| min | {data_to_table_row(stat_list[lchd_argmin])}"
+    out_str += f"| max | {data_to_table_row(stat_list[lchd_argmax])}\n"
+
+    # lDDT statistics
+    lddt_argmedian = np.argsort([x[3] for x in stat_list])[len(stat_list) // 2]
+    lddt_argmin = np.argmin([x[3] for x in stat_list])
+    lddt_argmax = np.argmax([x[3] for x in stat_list])
+
+    out_str += "## Statistics for the Median lDDT Values\n"
+    out_str += f"- mean: {np.mean([x[3] for x in stat_list]):.5f}\n"
+    out_str += f"- std: {np.std([x[3] for x in stat_list]):.5f}\n\n"
+
+    out_str += "| descriptor | structure | SpR | median LoCoHD | median lDDT |\n"
+    out_str += "| ---------: | :-------: | :-: | :-----------: | :---------: |\n"
+    out_str += f"| median | {data_to_table_row(stat_list[lddt_argmedian])}"
+    out_str += f"| min | {data_to_table_row(stat_list[lddt_argmin])}"
+    out_str += f"| max | {data_to_table_row(stat_list[lddt_argmax])}\n"
+
+    # Largest deviation statistics
+
+    deviations = list()
+    for structure_key in stat_dict:
+        value_matrix = np.array(list(stat_dict[structure_key].values()))
+        current_deviations = np.max(value_matrix, axis=0) - np.min(value_matrix, axis=0)
+        deviations.append((structure_key, *current_deviations))
+
+    spr_dev_argmax, locohd_dev_argmax, lddt_dev_argmax = np.argmax([x[1:] for x in deviations], axis=0)
+
+    out_str += "## Statistics for the Largest Deviations\n"
+    out_str += "| value label | structure | largest value deviation |\n"
+    out_str += "| ----------: | :-------: | :---------------------: |\n"
+    out_str += f"| SpR | {deviations[spr_dev_argmax][0]} | {deviations[spr_dev_argmax][1]:.7f} |\n"
+    out_str += f"| LoCoHD | {deviations[locohd_dev_argmax][0]} | {deviations[locohd_dev_argmax][2]:.7f} |\n"
+    out_str += f"| lDDT | {deviations[lddt_dev_argmax][0]} | {deviations[lddt_dev_argmax][3]:.7f} |\n\n"
+
+    return out_str
 
 
 def get_plot_alpha(lchd_scores, lddt_scores):
@@ -116,9 +195,10 @@ def main():
         structures: Dict[str, Dict[str, Structure]] = pickle.load(f)
 
     # For statistics collection.
-    spr_values = list()
-    median_lddts = list()
-    median_lchds = list()
+    # Key1: {structure_key}{PREDICTOR_KEY}
+    # Key2: {pred_id}
+    # Value: (SpR, median LoCoHD, median lDDT)
+    score_statistics: ScoreStatType = dict()
 
     # For the global histogram.
     hist_range = [[0, 0.5], [0, 1]]
@@ -129,6 +209,9 @@ def main():
 
         if not os.path.exists(LDDT_TARS_PATH / f"{structure_key}.tgz"):
             continue
+
+        # Initialize statistics dict for the current structure.
+        score_statistics[structure_key] = dict()
 
         # Read the lDDT values for the current structure. The lddt_dict is a dict of dicts, with
         # the first dict keys being "{structure_key}{PREDICTOR_KEY}_{structure_index}" and the second dict
@@ -162,12 +245,12 @@ def main():
                 lddt_scores.append(lddt_dict[key1][key2])
 
             # Calculating the Spearman's correlation coefficient
-            current_spr = spearmanr(lchd_scores, lddt_scores).correlation
+            current_spr: float = spearmanr(lchd_scores, lddt_scores).correlation
 
             # Updating the statistics.
-            spr_values.append(current_spr)
-            median_lchds.append(np.median(lchd_scores))
-            median_lddts.append(np.median(lddt_scores))
+            median_lchd = float(np.median(lchd_scores))
+            median_lddt = float(np.median(lddt_scores))
+            score_statistics[structure_key][pred_id] = (current_spr, median_lchd, median_lddt)
 
             # Plotting.
             create_plot(key1, lchd_scores, lddt_scores, current_spr)
@@ -190,28 +273,8 @@ def main():
 
             print(f"{key1} done...")
 
-    # Saving statistics.
-    out_str = ""
-    out_str += f"Mean SpR: {np.mean(spr_values)}\n"
-    out_str += f"Median SpR: {np.median(spr_values)}\n"
-    out_str += f"Std SpR: {np.std(spr_values)}\n"
-    out_str += f"Min SpR: {np.min(spr_values)}\n"
-    out_str += f"Max SpR: {np.max(spr_values)}\n"
-
-    out_str += f"Mean median lDDT: {np.mean(median_lddts)}\n"
-    out_str += f"Median median lDDT: {np.median(median_lddts)}\n"
-    out_str += f"Std median lDDT: {np.std(median_lddts)}\n"
-    out_str += f"Min median lDDT: {np.min(median_lddts)}\n"
-    out_str += f"Max median lDDT: {np.max(median_lddts)}\n"
-
-    out_str += f"Mean median LoCoHD: {np.mean(median_lchds)}\n"
-    out_str += f"Median median LoCoHD: {np.median(median_lchds)}\n"
-    out_str += f"Std median LoCoHD: {np.std(median_lchds)}\n"
-    out_str += f"Min median LoCoHD: {np.min(median_lchds)}\n"
-    out_str += f"Max median LoCoHD: {np.max(median_lchds)}\n"
-
-    with open(WORKDIR / "statistics.txt", "w") as f:
-        f.write(out_str)
+    with open(WORKDIR / "statistics.md", "w") as f:
+        f.write(get_statistics_str(score_statistics))
 
 
 if __name__ == "__main__":
