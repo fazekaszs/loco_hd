@@ -1,9 +1,9 @@
+import os.path
 import pickle
 import numpy as np
 import math
-import json
 from pathlib import Path
-from typing import List
+from typing import List, Tuple, Dict, Any
 
 import matplotlib.pyplot as plt
 
@@ -12,21 +12,243 @@ from scipy.optimize import curve_fit
 from scipy.stats import beta as beta_dist
 from scipy.stats import kstest
 
+# Residue hydrophobicities:
+# https://en.wikipedia.org/wiki/Hydrophobicity_scales#/media/File:Hydrophobicity_scales2.gif
+# Residue sizes:
+# https://www.imgt.org/IMGTeducation/Aide-memoire/_UK/aminoacids/IMGTclasses.html
 
-def source_to_name(source: Path) -> str:
+PROPERTY_NAMES = ["full", "resname", "charge", "aromaticity", "hydrophobicity", "size"]
+RESI_PROPERTIES = {
+    "GLY": ["-", "GLY", "neutral", "non-aromatic", "hydroneutral", "small"],
+    "ALA": ["-", "ALA", "neutral", "non-aromatic", "hydroneutral", "small"],
+    "VAL": ["-", "VAL", "neutral", "non-aromatic", "hydroneutral", "medium-size"],
+    "ILE": ["-", "ILE", "neutral", "non-aromatic", "hydrophobic", "large"],
+    "LEU": ["-", "LEU", "neutral", "non-aromatic", "hydrophobic", "large"],
+    "PHE": ["-", "PHE", "neutral", "aromatic", "hydrophobic", "large"],
+    "SER": ["-", "SER", "neutral", "non-aromatic", "hydroneutral", "small"],
+    "THR": ["-", "THR", "neutral", "non-aromatic", "hydroneutral", "small"],
+    "TYR": ["-", "TYR", "neutral", "aromatic", "hydrophobic", "large"],
+    "ASP": ["-", "ASP", "negative", "non-aromatic", "hydrophilic", "small"],
+    "GLU": ["-", "GLU", "negative", "non-aromatic", "hydrophilic", "medium-size"],
+    "ASN": ["-", "ASN", "neutral", "non-aromatic", "hydrophilic", "small"],
+    "GLN": ["-", "GLN", "neutral", "non-aromatic", "hydrophilic", "medium-size"],
+    "CYS": ["-", "CYS", "neutral", "non-aromatic", "hydrophobic", "small"],
+    "MET": ["-", "MET", "neutral", "non-aromatic", "hydrophobic", "large"],
+    "TRP": ["-", "TRP", "neutral", "aromatic", "hydrophobic", "large"],
+    "HIS": ["-", "HIS", "neutral", "aromatic", "hydroneutral", "medium-size"],
+    "ARG": ["-", "ARG", "positive", "non-aromatic", "hydrophilic", "large"],
+    "LYS": ["-", "LYS", "positive", "non-aromatic", "hydrophilic", "large"],
+    "PRO": ["-", "PRO", "neutral", "non-aromatic", "hydrophilic", "small"]
+}
 
-    with open(source / "params.json", "r") as f:
-        source_data = json.load(f)
 
-    primitive_typing = Path(source_data["assigner_config_path"])
-    primitive_typing = primitive_typing.name.replace(".config.json", "").replace("_", "-")
+class AdvancedWelfordStatistics:
+    """
+    Creates an object capable to collect statistics from a stream of data i.e.,
+    updates and keeps track of the following descriptors in an online manner:
+    - the number of samples seen
+    - the mean of the samples (estimate)
+    - the median of the samples (estimate)
+    - the variance of the samples (estimate)
+    - the minimum of the samples (exact)
+    - the maximum of the samples (exact)
 
-    weight_function = source_data["weight_function"]
-    weight_function = weight_function[0] + "-" + "-".join(map(str, weight_function[1]))
+    It uses the Welford online algorithm for this. The samples are stored in a buffer
+    vector, until the vector reaches its capacity. When it does, the descriptors are
+    updated and the buffer vector is flushed.
 
-    contacts = "only-hetero-contacts" if source_data["only_hetero_contacts"] else "all-contacts"
+    Also, samples are added as tuples: the first two elements of the tuples are residue
+    data in the form of "[PDB ID]/[chain ID]/[residue number]-[residue type]" strings. The
+    third element is the measured LoCoHD score between the two residue environments.
+    """
 
-    return "_".join([primitive_typing, weight_function, contacts])
+    def __init__(self, capacity: int = 10000):
+
+        self.capacity: int = capacity
+        self.n_of_samples: int = 0
+        self.buffer: List[Tuple[str, str, float]] = list()
+        self.mean: float = 0
+        self.full_var: float = 0
+        self.min: Tuple[str, str, float] = ("", "", float("inf"))
+        self.max: Tuple[str, str, float] = ("", "", float("-inf"))
+
+        # This only estimates the median!
+        self.medians: List[Tuple[str, str, float]] = list()
+
+    def collapse(self):
+        """
+        Updates the statistical descriptors based on the data inside the buffer
+        vector and then flushes the buffer.
+        """
+
+        # Each element is an (id1: str, id2: str, locohd: float) tuple in 'self.buffer'.
+        buffer_array = np.array([element[2] for element in self.buffer])
+
+        # Update the number of samples.
+        self.n_of_samples += len(buffer_array)
+
+        # Update the mean with the online algorithm:
+        # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Online
+        # This is a modification of the algorithm described above.
+        # Here, we add 'len(self.buffer)' number of samples each time.
+        old_mean = self.mean
+        self.mean = old_mean + (np.sum(buffer_array) - len(self.buffer) * old_mean) / self.n_of_samples
+
+        # Update the squared deviation from the mean.
+        self.full_var += np.sum((buffer_array - self.mean) * (buffer_array - old_mean))
+
+        # Update the min value.
+        current_min_idx = np.argmin(buffer_array)
+        current_min = buffer_array[current_min_idx]
+        if current_min < self.min[2]:
+            self.min = self.buffer[current_min_idx]
+
+        # Update the max value.
+        current_max_idx = np.argmax(buffer_array)
+        current_max = buffer_array[current_max_idx]
+        if current_max > self.max[2]:
+            self.max = self.buffer[current_max_idx]
+
+        # Update the medians.
+        self.medians += self.buffer
+        self.medians.sort(key=lambda x: x[2])
+        lower_cut = max((0, (len(self.medians) - self.capacity) // 2))
+        upper_cut = min((len(self.medians), (len(self.medians) + self.capacity) // 2))
+        self.medians = self.medians[lower_cut:upper_cut]
+
+        # Clean up the buffer.
+        self.buffer = list()
+
+    def update(self, value: Tuple[str, str, float]):
+        """
+        Adds a new element to the buffer vector and then calls collapse if the length
+        of the buffer vector exceeds the capacity.
+        :param value: A new sample from the LoCoHD distribution along with the LoCoHD source
+         (residue environment identifiers).
+        """
+
+        if len(self.buffer) < self.capacity:
+            self.buffer.append(value)
+            return
+
+        self.collapse()
+
+    def get_stat(self):
+
+        self.collapse()
+
+        std = math.sqrt(self.full_var / self.n_of_samples)
+        median = self.medians[len(self.medians) // 2]
+
+        out = {
+            "number of samples": self.n_of_samples,
+            "mean": self.mean,
+            "median": median,
+            "standard deviation": std,
+            "minimum": self.min,
+            "maximum": self.max
+        }
+
+        return out
+
+
+def generate_statistics(data: List[Tuple[str, str, float]]) -> List[Dict[Tuple[str, str], Dict[str, Any]]]:
+    """
+    Measures different statistical descriptors for different property type pairs within
+    a property category.
+    :param data:
+    :return:
+    """
+
+    # statistics is a list of dictionaries. Each element corresponds to a certain
+    #  property category from PROPERTY_NAMES (e.g. hydrophobicity). The keys of the
+    #  dictionaries are property pairs for the given category (e.g. hydrophilic-hydrophobic,
+    #  hydrophobic-hydroneutral, etc...). The values are AdvancedWelfordStatistics instances,
+    #  that keep track of the statistical descriptors of the samples.
+    statistics = [dict() for _ in PROPERTY_NAMES]
+
+    for progress, element in enumerate(data):
+
+        if progress % 1000 == 0:
+            print(f"\rStatistics gathering progress: {progress / len(data):.1%}", end="")
+
+        resi_name1 = element[0][-3:]
+        resi_name2 = element[1][-3:]
+
+        # These are the property lists of the two amino acids.
+        props1 = RESI_PROPERTIES[resi_name1]
+        props2 = RESI_PROPERTIES[resi_name2]
+
+        for idx, (prop1, prop2) in enumerate(zip(props1, props2)):
+
+            key = (prop1, prop2) if prop1 > prop2 else (prop2, prop1)  # make it unambiguous
+
+            if key not in statistics[idx]:
+                statistics[idx][key] = AdvancedWelfordStatistics()
+
+            statistics[idx][key].update(element)
+
+    # Convert from AdvancedWelfordStatistics to exact statistical descriptors.
+    for category_stat in statistics:
+
+        for cat_key in category_stat:
+            category_stat[cat_key] = category_stat[cat_key].get_stat()
+
+    print()
+    return statistics
+
+
+def stat_to_tsvs(statistics: List[Dict[Tuple[str, str], Dict[str, Any]]]) -> List[str]:
+    """
+    Creates several tsv file texts based on the statistics provided from the
+    generate_statistics function.
+    :param statistics:
+    :return:
+    """
+
+    # Create the tsv formatted string for every property category.
+    output = ["" for _ in PROPERTY_NAMES]
+    for prop_name_idx, category_stat in enumerate(statistics):
+
+        # Convert the category statistics dictionaries to lists of items and
+        #  sort them based on the mean values.
+        category_stat_items: List[Tuple[Tuple[str, str], Dict[str, Any]]]
+        category_stat_items = list(category_stat.items())
+        category_stat_items.sort(key=lambda x: x[1]["mean"])
+
+        # Create tsv header
+        output[prop_name_idx] += "type 1\ttype 2\t"
+        output[prop_name_idx] += "number of samples\t"
+        output[prop_name_idx] += "mean\t"
+        output[prop_name_idx] += "median id 1\tmedian id 2\tmedian\t"
+        output[prop_name_idx] += "standard deviation\t"
+        output[prop_name_idx] += "confidence interval\t"
+        output[prop_name_idx] += "minimum id 1\tminimum id 2\tminimum\t"
+        output[prop_name_idx] += "maximum id 1\tmaximum id 2\tmaximum\n"
+
+        # Fill the tsv with data
+        for (prop_type1, prop_type2), prop_type_stat in category_stat_items:
+
+            conf_interval = stats.t.ppf(0.95, prop_type_stat["number of samples"] - 1)
+            conf_interval *= prop_type_stat["standard deviation"]
+            conf_interval /= math.sqrt(prop_type_stat["number of samples"])
+
+            output[prop_name_idx] += f"{prop_type1}\t{prop_type2}\t"
+            output[prop_name_idx] += f"{prop_type_stat['number of samples']}\t"
+            output[prop_name_idx] += f"{prop_type_stat['mean']}\t"
+            output[prop_name_idx] += f"{prop_type_stat['median'][0]}\t"
+            output[prop_name_idx] += f"{prop_type_stat['median'][1]}\t"
+            output[prop_name_idx] += f"{prop_type_stat['median'][2]}\t"
+            output[prop_name_idx] += f"{prop_type_stat['standard deviation']}\t"
+            output[prop_name_idx] += f"{conf_interval}\t"
+            output[prop_name_idx] += f"{prop_type_stat['minimum'][0]}\t"
+            output[prop_name_idx] += f"{prop_type_stat['minimum'][1]}\t"
+            output[prop_name_idx] += f"{prop_type_stat['minimum'][2]}\t"
+            output[prop_name_idx] += f"{prop_type_stat['maximum'][0]}\t"
+            output[prop_name_idx] += f"{prop_type_stat['maximum'][1]}\t"
+            output[prop_name_idx] += f"{prop_type_stat['maximum'][2]}\n"
+
+    return output
 
 
 def fit_beta_to_samples(lchd_values: List[float]):
@@ -46,63 +268,40 @@ def fit_beta_to_samples(lchd_values: List[float]):
 
 def main():
 
-    out_str = ""
-
     workdir = Path("workdir/pisces")
     data_source = "run_2023-01-10-11-52-33"
 
-    run_name = source_to_name(workdir / data_source)
-
-    out_str += f"Opening directory: \"{data_source}\" at \"{workdir}\"\n"
+    print(f"Opening directory: \"{data_source}\" at \"{workdir}\"")
 
     with open(workdir / data_source / "locohd_data.pisces", "rb") as f:
-        data = pickle.load(f)
+        data: List[Tuple[str, str, float]] = pickle.load(f)
 
-    out_str += f"Number of samples: {len(data)}\n"
+    print(f"Number of samples: {len(data)}. Starting to generate statistics...")
 
-    resi_stat = dict()
-    for element in data:
+    # Generating statistics for different property type pairs.
+    statistics = generate_statistics(data)
 
-        key = [element[0][-3:], element[1][-3:]]
-        key = sorted(key)
-        key = tuple(key)
+    print("Statistics generated! Creating tsvs...")
+    tsvs = stat_to_tsvs(statistics)
 
-        if key in resi_stat:
-            resi_stat[key].append(element[2])
-        else:
-            resi_stat[key] = [element[2], ]
+    # Saving the statistics.
 
-    for key in resi_stat:
+    print("tsvs created! Saving tsv tables...")
+    analysis_dir_path = workdir / data_source / "analysis"
+    if not os.path.exists(analysis_dir_path):
+        os.mkdir(analysis_dir_path)
 
-        sample_mean = np.mean(resi_stat[key])
-        sample_std = np.std(resi_stat[key])
-        sample_conf_int = stats.t.ppf(0.95, len(resi_stat[key]) - 2) * sample_std / math.sqrt(len(resi_stat[key]))
+    for prop_name, tsv_data in zip(PROPERTY_NAMES, tsvs):
+        with open(analysis_dir_path / f"{prop_name}_statistics.tsv", "w") as f:
+            f.write(tsv_data)
 
-        resi_stat[key] = (sample_mean, sample_std, sample_conf_int)
-
-    resi_pairs = list(resi_stat.keys())
-    resi_pairs = sorted(resi_pairs, key=lambda x: resi_stat[x][0])
-
-    out_str += f"Average random residue-residue LoCoHD:\n"
-    for key in resi_pairs:
-        out_str += f"\t{key[0]}-{key[1]}: {resi_stat[key][0]:.2%} +/- {resi_stat[key][2]:.2%}\n"
-
-    del resi_stat
-
+    # Fitting a beta-distribution to the data
+    print("tsv tables saved! Fitting beta-distribution...")
     lchd_scores = list(map(lambda x: x[2], data))
-
-    min_idx = np.argmin(lchd_scores)
-    max_idx = np.argmax(lchd_scores)
-
-    out_str += f"Global statistics:\n"
-    out_str += f"\tmean: {np.mean(lchd_scores):.5%}\n"
-    out_str += f"\tmedian: {np.median(lchd_scores):.5%}\n"
-    out_str += f"\tstd: {np.std(lchd_scores):.5%}\n"
-    out_str += f"\tmin: {lchd_scores[min_idx]:.5%} (at {data[min_idx][0]} and {data[min_idx][1]})\n"
-    out_str += f"\tmax: {lchd_scores[max_idx]:.5%} (at {data[max_idx][0]} and {data[max_idx][1]})\n"
 
     beta_params = fit_beta_to_samples(lchd_scores)
 
+    out_str = ""
     out_str += f"Beta distribution parameters:\n"
     out_str += f"\talpha = {beta_params[0]:.5f}\n"
     out_str += f"\tbeta = {beta_params[1]:.5f}\n"
@@ -112,11 +311,13 @@ def main():
     out_str += f"\tstatistics = {kstest_result[0]}\n"
     out_str += f"\tp-value = {kstest_result[1]}\n"
 
-    with open(workdir / data_source / (run_name + ".analysis"), "w") as f:
+    with open(analysis_dir_path / "fitting_params.txt", "w") as f:
         f.write(out_str)
 
     print(out_str)
 
+    # Plotting the full distribution histogram, along with the fitted beta distribution PDF.
+    print("Beta-distribution fitted and saved! Starting to plot...")
     fig, ax = plt.subplots()
 
     ax.hist(lchd_scores, bins=100, density=True, label="experimental distribution")
@@ -129,7 +330,7 @@ def main():
     ax.set_ylabel("Density")
     x_ticks = np.arange(0, 1 + 0.2, 0.2)
     ax.set_xticks(x_ticks, [f"{x:.0%}" for x in x_ticks])
-    fig.savefig(workdir / data_source / (run_name + ".histogram.png"), dpi=300)
+    fig.savefig(analysis_dir_path / "distribution.png", dpi=300)
 
 
 if __name__ == "__main__":
