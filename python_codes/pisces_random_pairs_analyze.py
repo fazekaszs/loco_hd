@@ -16,29 +16,35 @@ from scipy.stats import kstest
 # https://en.wikipedia.org/wiki/Hydrophobicity_scales#/media/File:Hydrophobicity_scales2.gif
 # Residue sizes:
 # https://www.imgt.org/IMGTeducation/Aide-memoire/_UK/aminoacids/IMGTclasses.html
+# Secondary structure propensities:
+# https://bmcstructbiol.biomedcentral.com/articles/10.1186/1472-6807-12-18/tables/2
 
-PROPERTY_NAMES = ["full", "resname", "charge", "aromaticity", "hydrophobicity", "size"]
+PROPERTY_NAMES = [
+    "full", "resname", "charge", "aromaticity",
+    "hydrophobicity", "size", "helix_propensity",
+    "sheet_propensity"
+]
 RESI_PROPERTIES = {
-    "GLY": ["-", "GLY", "neutral", "non-aromatic", "hydroneutral", "small"],
-    "ALA": ["-", "ALA", "neutral", "non-aromatic", "hydroneutral", "small"],
-    "VAL": ["-", "VAL", "neutral", "non-aromatic", "hydroneutral", "medium-size"],
-    "ILE": ["-", "ILE", "neutral", "non-aromatic", "hydrophobic", "large"],
-    "LEU": ["-", "LEU", "neutral", "non-aromatic", "hydrophobic", "large"],
-    "PHE": ["-", "PHE", "neutral", "aromatic", "hydrophobic", "large"],
-    "SER": ["-", "SER", "neutral", "non-aromatic", "hydroneutral", "small"],
-    "THR": ["-", "THR", "neutral", "non-aromatic", "hydroneutral", "small"],
-    "TYR": ["-", "TYR", "neutral", "aromatic", "hydrophobic", "large"],
-    "ASP": ["-", "ASP", "negative", "non-aromatic", "hydrophilic", "small"],
-    "GLU": ["-", "GLU", "negative", "non-aromatic", "hydrophilic", "medium-size"],
-    "ASN": ["-", "ASN", "neutral", "non-aromatic", "hydrophilic", "small"],
-    "GLN": ["-", "GLN", "neutral", "non-aromatic", "hydrophilic", "medium-size"],
-    "CYS": ["-", "CYS", "neutral", "non-aromatic", "hydrophobic", "small"],
-    "MET": ["-", "MET", "neutral", "non-aromatic", "hydrophobic", "large"],
-    "TRP": ["-", "TRP", "neutral", "aromatic", "hydrophobic", "large"],
-    "HIS": ["-", "HIS", "neutral", "aromatic", "hydroneutral", "medium-size"],
-    "ARG": ["-", "ARG", "positive", "non-aromatic", "hydrophilic", "large"],
-    "LYS": ["-", "LYS", "positive", "non-aromatic", "hydrophilic", "large"],
-    "PRO": ["-", "PRO", "neutral", "non-aromatic", "hydrophilic", "small"]
+    "GLY": ["-", "GLY", "neutral", "non-aromatic", "hydroneutral", "small", "low", "low"],
+    "ALA": ["-", "ALA", "neutral", "non-aromatic", "hydroneutral", "small", "high", "low"],
+    "VAL": ["-", "VAL", "neutral", "non-aromatic", "hydroneutral", "medium-size", "intermediate", "high"],
+    "ILE": ["-", "ILE", "neutral", "non-aromatic", "hydrophobic", "large", "intermediate", "high"],
+    "LEU": ["-", "LEU", "neutral", "non-aromatic", "hydrophobic", "large", "high", "intermediate"],
+    "PHE": ["-", "PHE", "neutral", "aromatic", "hydrophobic", "large", "intermediate", "high"],
+    "SER": ["-", "SER", "neutral", "non-aromatic", "hydroneutral", "small", "low", "intermediate"],
+    "THR": ["-", "THR", "neutral", "non-aromatic", "hydroneutral", "small", "low", "intermediate"],
+    "TYR": ["-", "TYR", "neutral", "aromatic", "hydrophobic", "large", "intermediate", "high"],
+    "ASP": ["-", "ASP", "negative", "non-aromatic", "hydrophilic", "small", "low", "low"],
+    "GLU": ["-", "GLU", "negative", "non-aromatic", "hydrophilic", "medium-size", "high", "low"],
+    "ASN": ["-", "ASN", "neutral", "non-aromatic", "hydrophilic", "small", "low", "low"],
+    "GLN": ["-", "GLN", "neutral", "non-aromatic", "hydrophilic", "medium-size", "high", "low"],
+    "CYS": ["-", "CYS", "neutral", "non-aromatic", "hydrophobic", "small", "low", "high"],
+    "MET": ["-", "MET", "neutral", "non-aromatic", "hydrophobic", "large", "high", "intermediate"],
+    "TRP": ["-", "TRP", "neutral", "aromatic", "hydrophobic", "large", "intermediate", "high"],
+    "HIS": ["-", "HIS", "neutral", "aromatic", "hydroneutral", "medium-size", "intermediate", "intermediate"],
+    "ARG": ["-", "ARG", "positive", "non-aromatic", "hydrophilic", "large", "high", "intermediate"],
+    "LYS": ["-", "LYS", "positive", "non-aromatic", "hydrophilic", "large", "intermediate", "intermediate"],
+    "PRO": ["-", "PRO", "neutral", "non-aromatic", "hydrophilic", "small", "low", "low"]
 }
 
 
@@ -55,14 +61,15 @@ class AdvancedWelfordStatistics:
 
     It uses the Welford online algorithm for this. The samples are stored in a buffer
     vector, until the vector reaches its capacity. When it does, the descriptors are
-    updated and the buffer vector is flushed.
+    updated and the buffer vector is flushed. The higher the capacity, the more accurate
+    are the estimated descriptors, but the slower the algorithm.
 
     Also, samples are added as tuples: the first two elements of the tuples are residue
     data in the form of "[PDB ID]/[chain ID]/[residue number]-[residue type]" strings. The
     third element is the measured LoCoHD score between the two residue environments.
     """
 
-    def __init__(self, capacity: int = 10000):
+    def __init__(self, capacity: int = 1_000_000):
 
         self.capacity: int = capacity
         self.n_of_samples: int = 0
@@ -127,11 +134,10 @@ class AdvancedWelfordStatistics:
          (residue environment identifiers).
         """
 
-        if len(self.buffer) < self.capacity:
-            self.buffer.append(value)
-            return
+        self.buffer.append(value)
 
-        self.collapse()
+        if len(self.buffer) == self.capacity:
+            self.collapse()
 
     def get_stat(self):
 
@@ -269,7 +275,8 @@ def fit_beta_to_samples(lchd_values: List[float]):
 def main():
 
     workdir = Path("workdir/pisces")
-    data_source = "run_2023-01-10-11-52-33"
+    # data_source = "run_2023-01-10-11-52-33"
+    data_source = "run_2023-02-08-12-50-23"
 
     print(f"Opening directory: \"{data_source}\" at \"{workdir}\"")
 
