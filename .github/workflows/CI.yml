@@ -9,14 +9,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - uses: actions/setup-python@v4
-      with:
-        python-version: "3.8"
     - uses: messense/maturin-action@v1
       with:
         manylinux: auto
         command: build
-        args: --release --sdist -o dist
+        args: --release -i python3.8 --sdist -o dist
     - name: Upload wheels
       uses: actions/upload-artifact@v2
       with:
