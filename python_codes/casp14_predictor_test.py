@@ -168,13 +168,16 @@ def create_plot(key: str, lchd_scores: List[float], lddt_scores: List[float], sp
     ax.set_xlabel("LoCoHD score")
     ax.set_ylabel("lDDT score")
     fig.suptitle(key)
-    legend_handles = [Rectangle((0, 0), 1, 1, fc="white", ec="white", lw=0, alpha=0), ] * 3
+
     legend_labels = list()
-    legend_labels.append(f"SpR = {spr:.5f}")
-    legend_labels.append(f"mean LoCoHD = {np.mean(lchd_scores):.1%}")
-    legend_labels.append(f"mean lDDT = {np.mean(lddt_scores):.1%}")
-    ax.legend(legend_handles, legend_labels,
-              loc="upper right", fontsize="small", fancybox=True,
+    legend_labels.append(f"SpR = {spr:.4f}")
+    legend_labels.append(f"mean LoCoHD = {np.mean(lchd_scores):.2%}")
+    legend_labels.append(f"median LoCoHD = {np.median(lchd_scores):.2%}")
+    legend_labels.append(f"mean lDDT = {np.mean(lddt_scores):.2%}")
+    legend_labels.append(f"median lDDT = {np.median(lddt_scores):.2%}")
+    legend_handles = [Rectangle((0, 0), 1, 1, fc="white", ec="white", lw=0, alpha=0), ] * len(legend_labels)
+
+    ax.legend(legend_handles, legend_labels, loc="upper right", fontsize="small", fancybox=True,
               framealpha=0.7, handlelength=0, handletextpad=0)
     fig.savefig(WORKDIR / f"{key}.png", dpi=300)
 
@@ -189,8 +192,10 @@ def main():
     # Create the LoCoHD instance.
     lchd = LoCoHD(primitive_assigner.all_primitive_types, ("uniform", [3, 10]))
 
-    # The values in the structures dict are lists of structures, where the first structure
-    # in the lists is the true structure, and the rest of them are the predicted structures.
+    # The values in the structures dict are also dicts. The first key refers to the
+    # structure name (like T1024), while the second key is either "true" (referring to the true structure)
+    # or a string of an integer ("1", "2"...), referring to the prediction id (like T1024{PREDICTOR_KEY}_1).
+    # The values of this second dict are BioPython structures.
     with open(WORKDIR / f"{PREDICTOR_KEY}_structures.pickle", "rb") as f:
         structures: Dict[str, Dict[str, Structure]] = pickle.load(f)
 
