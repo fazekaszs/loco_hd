@@ -1,4 +1,6 @@
 import os
+import pickle
+
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -154,7 +156,7 @@ def compare_structures(prot_root_path: Path, save_dir: Path, save_name: str) -> 
     primitive_assigner = PrimitiveAssigner(Path("primitive_typings/coarse_grained.config.json"))
 
     # Initialize LoCoHD instance
-    lchd = LoCoHD(primitive_assigner.all_primitive_types, ("hyper_exp", [1., 0.2]))
+    lchd = LoCoHD(primitive_assigner.all_primitive_types, ("uniform", [3., 10.]))
 
     # Collect all the filenames in the directory
     all_files: List[str] = os.listdir(prot_root_path)
@@ -264,26 +266,37 @@ def compare_structures(prot_root_path: Path, save_dir: Path, save_name: str) -> 
             print(f"\rCompletion: {len(runtimes) / n_of_comparisons:.1%}", end="")
 
     print()
+    lchd_by_atom = np.mean(lchd_by_atom, axis=0)
 
     # Printing time statistics
-    lchd_by_atom = np.mean(lchd_by_atom, axis=0)
     print(f"Mean time per run: {np.mean(runtimes):.5f} s")
     print(f"Std of runtimes: {np.std(runtimes):.10f} s")
     print(f"Total runtime: {np.sum(runtimes):.5f} s")
 
     # Sort the rows and columns of the locohd and rmsd distance matrices
+    #  based on the mean row lchd values.
     sorted_dmx_mask = np.argsort(np.mean(lchd_dmx, axis=0))
     lchd_dmx = lchd_dmx[:, sorted_dmx_mask][sorted_dmx_mask, :]
     rmsd_dmx = rmsd_dmx[:, sorted_dmx_mask][sorted_dmx_mask, :]
 
+    # Save raw dmx data
+    raw_save_name = save_name + "_rawDmxData.pickle"
+    with open(save_dir / raw_save_name, "wb") as f:
+        pickle.dump({
+            "lchd_dmx": lchd_dmx,
+            "rmsd_dmx": rmsd_dmx,
+            "filenames": np.array(all_files)[sorted_dmx_mask]
+        }, f)
+    print("Raw distance matrix data succesfully saved!")
+
     # Save b-factor labelled structure
     b_labelled_pdb = primitive_assigner.generate_primitive_pdb(template_lists[0], b_labels=lchd_by_atom)
 
-    full_save_name = save_name + "_blabelled.pdb"
-    with open(save_dir / full_save_name, "w") as f:
+    pdb_save_name = save_name + "_blabelled.pdb"
+    with open(save_dir / pdb_save_name, "w") as f:
         f.write(b_labelled_pdb)
 
-    print(f"B-labelled primitive structure saved as {full_save_name} based on the template {all_files[0]}!")
+    print(f"B-labelled primitive structure saved as {pdb_save_name} based on the template {all_files[0]}!")
 
     return {"rmsd_dmx": rmsd_dmx, "lchd_dmx": lchd_dmx, "lchd_by_atom": lchd_by_atom}
 
@@ -293,13 +306,13 @@ def main():
     save_dir = Path("./workdir/prot_batch_resuls")
     paths_and_names = [
         # ("./workdir/pdb_files/h5", "h5_dummy"),
-        ("/home/fazekaszs/CoreDir/PhD/PDB/H5/277", "h5_277"),
-        ("/home/fazekaszs/CoreDir/PhD/PDB/H5/288", "h5_288"),
-        ("/home/fazekaszs/CoreDir/PhD/PDB/H5/299", "h5_299"),
-        ("/home/fazekaszs/CoreDir/PhD/PDB/H5/310", "h5_310"),
-        ("/home/fazekaszs/CoreDir/PhD/PDB/H5/321", "h5_321"),
+        # ("/home/fazekaszs/CoreDir/PhD/PDB/H5/277", "h5_277"),
+        # ("/home/fazekaszs/CoreDir/PhD/PDB/H5/288", "h5_288"),
+        # ("/home/fazekaszs/CoreDir/PhD/PDB/H5/299", "h5_299"),
+        # ("/home/fazekaszs/CoreDir/PhD/PDB/H5/310", "h5_310"),
+        # ("/home/fazekaszs/CoreDir/PhD/PDB/H5/321", "h5_321"),
         # ("./workdir/pdb_files/PED00075e000", "PED00075e000"),
-        # ("./workdir/pdb_files/PED00072e000", "PED00072e000"),
+        ("./workdir/pdb_files/PED00072e000", "PED00072e000"),
     ]
 
     rmsd_dmxs, lchd_dmxs, lchd_by_atom = list(), list(), list()
