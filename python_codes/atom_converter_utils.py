@@ -1,5 +1,6 @@
-import numpy as np
+import re
 import json
+import numpy as np
 
 from pathlib import Path
 from typing import Union, List, Tuple, Dict
@@ -9,6 +10,7 @@ from Bio.PDB.Structure import Structure
 from Bio.PDB.Model import Model
 from Bio.PDB.Chain import Chain
 from Bio.PDB.Residue import Residue
+from Bio.PDB.Atom import Atom
 
 AtomHolders = Union[Structure, Model, Chain]
 ResiFullIdType = Tuple[str, int, str, Tuple[str, int, str]]  # structure id, model id, chain id, residue id
@@ -19,9 +21,8 @@ class PrimitiveAtomSource:
     """
         Contains the residue source for the primitive atom, as well as the atomic-level details.
         The source_atom field contains info about how the primitive atom was constructed; it is
-        either an empty list (denoting full-residue centroid), a list with only one element
-        (denoting one source atom name), or a list with multiple elements (denoting that the
-        primitive atom is a centroid of several atoms).
+        either a list with only one element (denoting one source atom name), or a list with
+        multiple elements (denoting that the primitive atom is a centroid of several atoms).
     """
 
     source_residue: ResiFullIdType
@@ -41,6 +42,20 @@ class PrimitiveAtomTemplate:
     atom_source: PrimitiveAtomSource
 
 
+@dataclass
+class TypingSchemeElement:
+
+    primitive_type: str
+    residue_matcher: re.Pattern
+    atom_matcher: re.Pattern
+
+    def match_resi(self, resi_name: str) -> bool:
+        return self.residue_matcher.fullmatch(resi_name) is not None
+
+    def match_atom(self, atom_name: str) -> bool:
+        return self.atom_matcher.fullmatch(atom_name) is not None
+
+
 class PrimitiveAssigner:
     """
         Aims to contain the primitive typing scheme and is able to convert protein structures (i.e.,
@@ -50,189 +65,61 @@ class PrimitiveAssigner:
     def __init__(self, config_path: Path):
 
         with open(config_path, "r") as f:
-            config: Dict[str, List[str]] = json.load(f)
+            config: Dict[str, List[List[str]]] = json.load(f)
 
-        self.converter_dict = {
-            "*:*": list(),  # A list of primitive types (str)
-            "*:A-B": list(),  # A list of 2-tuples: [(N-tuple specifying atoms, primitive type), ... ]
-            "*:A": list(),  # A list of 2-tuples: [(atom name, primitive type), ...]
-            "X:*": dict(),  # A dict with residue names (str) as keys and a list of prim. types (like *:*) as a value
-            "X:A-B": dict(),  # A dict with residue names (str) as keys and a list of 2-tuples (like *:A-B) as a value
-            "X:A": dict(),  # A dict with residue names (str) as keys and a list of 2-tuples (like *:A) as a value
-        }
+        self.scheme: List[TypingSchemeElement] = list()
+        for primitive_type, scheme_elements in config.items():
 
-        for primitive_type, atom_name_list in config.items():
+            for residue_matcher, atom_matcher in scheme_elements:
 
-            for atom_name_list_element in atom_name_list:
+                c_residue_matcher = re.compile(residue_matcher)
+                c_atom_matcher = re.compile(atom_matcher)
 
-                resi_specifier, atom_specifier = atom_name_list_element.split(":")
-
-                is_universal_resi = resi_specifier == "*"
-                is_universal_atom = atom_specifier == "*"
-                is_centroid_atom = "-" in atom_specifier
-
-                if is_universal_resi and is_universal_atom:
-                    self.converter_dict["*:*"].append(primitive_type)
-
-                elif is_universal_resi and is_centroid_atom:
-                    centroid_atom_list = tuple(atom_specifier.split("-"))
-                    self.converter_dict["*:A-B"].append((centroid_atom_list, primitive_type))
-
-                elif is_universal_resi:
-                    self.converter_dict["*:A"].append((atom_specifier, primitive_type))
-
-                elif is_universal_atom:
-                    if resi_specifier in self.converter_dict["X:*"]:
-                        self.converter_dict["X:*"][resi_specifier].append(primitive_type)
-                    else:
-                        self.converter_dict["X:*"][resi_specifier] = [primitive_type, ]
-
-                elif is_centroid_atom:
-                    centroid_atom_list = tuple(atom_specifier.split("-"))
-                    if resi_specifier in self.converter_dict["X:A-B"]:
-                        self.converter_dict["X:A-B"][resi_specifier].append((centroid_atom_list, primitive_type))
-                    else:
-                        self.converter_dict["X:A-B"][resi_specifier] = [(centroid_atom_list, primitive_type), ]
-
-                else:
-                    if resi_specifier in self.converter_dict["X:A"]:
-                        self.converter_dict["X:A"][resi_specifier].append((atom_specifier, primitive_type))
-                    else:
-                        self.converter_dict["X:A"][resi_specifier] = [(atom_specifier, primitive_type), ]
+                new_element = TypingSchemeElement(primitive_type, c_residue_matcher, c_atom_matcher)
+                self.scheme.append(new_element)
 
     @property
     def all_primitive_types(self) -> List[str]:
-
-        primitive_types = set()
-
-        for pr_type in self.converter_dict["*:*"]:
-            primitive_types.add(pr_type)
-
-        for _, pr_type in self.converter_dict["*:A-B"]:
-            primitive_types.add(pr_type)
-
-        for _, pr_type in self.converter_dict["*:A"]:
-            primitive_types.add(pr_type)
-
-        for resi_name in self.converter_dict["X:*"]:
-            for pr_type in self.converter_dict["X:*"][resi_name]:
-                primitive_types.add(pr_type)
-
-        for resi_name in self.converter_dict["X:A-B"]:
-            for _, pr_type in self.converter_dict["X:A-B"][resi_name]:
-                primitive_types.add(pr_type)
-
-        for resi_name in self.converter_dict["X:A"]:
-            for _, pr_type in self.converter_dict["X:A"][resi_name]:
-                primitive_types.add(pr_type)
-
-        return list(primitive_types)
+        return list({element.primitive_type for element in self.scheme})
 
     @all_primitive_types.setter
     def all_primitive_types(self, value):
         raise Exception("Cannot set all_primitive_types directly, since it depends on the config file!")
 
-    def assign_primitive_structure(self, structure: AtomHolders,
-                                   verbose: bool = False) -> List[PrimitiveAtomTemplate]:
-
-        def warn(warn_msg: str):
-            if verbose:
-                print(warn_msg)
+    def assign_primitive_structure(self, structure: AtomHolders) -> List[PrimitiveAtomTemplate]:
 
         out = list()
 
         resi: Residue
         for resi in structure.get_residues():
 
-            resi_id = resi.full_id
             resi_name = resi.resname
+            resi_id = resi.full_id
 
-            # CATEGORY *:*
-            full_centroid_coord = None
-            if len(self.converter_dict["*:*"]) > 0:
+            for tse in self.scheme:
 
-                full_centroid_coord = resi.center_of_mass(geometric=True)
-                for primitive_type in self.converter_dict["*:*"]:
-
-                    pra_source = PrimitiveAtomSource(resi_id, resi_name, list())
-                    pra_template = PrimitiveAtomTemplate(primitive_type, full_centroid_coord, pra_source)
-                    out.append(pra_template)
-
-            # CATEGORY *:A-B
-            for atom_names, primitive_type in self.converter_dict["*:A-B"]:
-
-                partial_centroid_coord = list()
-                for atom_name in atom_names:
-
-                    if atom_name in resi:
-                        partial_centroid_coord.append(resi[atom_name].coord)
-                    else:
-                        warn(f"Warning: no atom named {atom_name} in residue {resi_id} ({resi.resname})!")
-                        break
-                else:
-
-                    partial_centroid_coord = np.mean(partial_centroid_coord, axis=0)
-
-                    pra_source = PrimitiveAtomSource(resi_id, resi_name, atom_names)
-                    pra_template = PrimitiveAtomTemplate(primitive_type, partial_centroid_coord, pra_source)
-                    out.append(pra_template)
-
-            # CATEGORY *:A
-            for atom_name, primitive_type in self.converter_dict["*:A"]:
-
-                if atom_name not in resi:
-                    warn(f"Warning: no atom named {atom_name} in residue {resi_id} ({resi.resname})!")
+                if not tse.match_resi(resi_name):
                     continue
 
-                pra_source = PrimitiveAtomSource(resi_id, resi_name, [atom_name, ])
-                pra_template = PrimitiveAtomTemplate(primitive_type, resi[atom_name].coord, pra_source)
-                out.append(pra_template)
+                atom_names = list()
+                atom_coords = list()
 
-            # CATEGORY X:*
-            if resi.resname in self.converter_dict["X:*"]:
+                atom: Atom
+                for atom in resi.get_atoms():
 
-                if full_centroid_coord is None:
-                    full_centroid_coord = resi.center_of_mass(geometric=True)
-
-                for primitive_type in self.converter_dict["X:*"][resi.resname]:
-
-                    pra_source = PrimitiveAtomSource(resi_id, resi_name, list())
-                    pra_template = PrimitiveAtomTemplate(primitive_type, full_centroid_coord, pra_source)
-                    out.append(pra_template)
-
-            # CATEGORY X:A-B
-            if resi.resname in self.converter_dict["X:A-B"]:
-
-                for atom_names, primitive_type in self.converter_dict["X:A-B"][resi.resname]:
-
-                    partial_centroid_coord = list()
-                    for atom_name in atom_names:
-
-                        if atom_name in resi:
-                            partial_centroid_coord.append(resi[atom_name].coord)
-                        else:
-                            warn(f"Warning: no atom named {atom_name} in residue {resi_id} ({resi.resname})!")
-                            break
-                    else:
-
-                        partial_centroid_coord = np.mean(partial_centroid_coord, axis=0)
-
-                        pra_source = PrimitiveAtomSource(resi_id, resi_name, atom_names)
-                        pra_template = PrimitiveAtomTemplate(primitive_type, partial_centroid_coord, pra_source)
-                        out.append(pra_template)
-
-            # CATEGORY X:A
-            if resi.resname in self.converter_dict["X:A"]:
-
-                for atom_name, primitive_type in self.converter_dict["X:A"][resi.resname]:
-
-                    if atom_name not in resi:
-                        warn(f"Warning: no atom named {atom_name} in residue {resi_id} ({resi.resname})!")
+                    if not tse.match_atom(atom.name):
                         continue
 
-                    pra_source = PrimitiveAtomSource(resi_id, resi_name, [atom_name, ])
-                    pra_template = PrimitiveAtomTemplate(primitive_type, resi[atom_name].coord, pra_source)
-                    out.append(pra_template)
+                    atom_names.append(atom.name)
+                    atom_coords.append(atom.coord)
+
+                if len(atom_coords) == 0:
+                    continue
+
+                centroid = np.mean(atom_coords, axis=0)
+                pras = PrimitiveAtomSource(resi_id, resi_name, atom_names)
+                prat = PrimitiveAtomTemplate(tse.primitive_type, centroid, pras)
+                out.append(prat)
 
         return out
 

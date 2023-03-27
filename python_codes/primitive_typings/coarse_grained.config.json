@@ -1,28 +1,44 @@
 {
-    "AmideC": ["*:C", "ASN:CG", "GLN:CD"],
-    "OH": ["SER:OG", "THR:OG1", "TYR:OH"],
-    "Pos": ["ARG:CZ", "LYS:NZ"],
+    "AmideC": [
+        [".+", "C"],
+        ["ASN", "CG"],
+        ["GLN", "CD"]
+    ],
+    "OH": [
+        ["SER", "OG"],
+        ["THR", "OG1"],
+        ["TYR", "OH"]
+    ],
+    "Pos": [
+        ["ARG", "CZ"],
+        ["LYS", "NZ"]
+    ],
     "Neg": [
-        "*:OT1-OT2", "*:OC1-OC2", "*:O-OXT",
-        "GLU:OE1-OE2", "ASP:OD1-OD2"
+        [".+", "OT(1|2)"], [".+", "OC(1|2)"], [".+", "(O|OXT)"],
+        ["GLU", "OE(1|2)"],
+        ["ASP", "OD(1|2)"]
     ],
     "Aro": [
-        "PHE:CG-CZ", "TYR:CG-CZ",
-        "TRP:CD2-CH2", "TRP:CG-CD1-CD2-NE1-CE2",
-        "HIS:CG-ND1-CD2-CE1-NE2"
+        ["PHE", "C(G|Z)"],
+        ["TYR", "G(G|Z)"],
+        ["TRP", "C(D|H)2"], ["TRP", "(CG|CD1|CD2|NE1|NE2|CE2)"],
+        ["HIS", "(CG|ND1|CD2|CE1|NE2)"]
     ],
     "Ali": [
-        "ALA:CB",
-        "VAL:CB-CG1-CG2",
-        "ILE:CB-CG1-CG2-CD1",
-        "LEU:CB-CG-CD1-CD2",
-        "THR:CG2",
-        "GLU:CB-CG",
-        "GLN:CB-CG",
-        "ARG:CB-CG-CD",
-        "LYS:CB-CG-CD-CE",
-        "MET:CB-CG-SD-CE",
-        "PRO:CB-CG-CD"
+        ["ALA", "CB"],
+        ["VAL", "(CB|CG1|CG2)"],
+        ["ILE", "(CB|CG1|CG2|CD1)"],
+        ["LEU", "(CB|CG|CD1|CD2)"],
+        ["THR", "CG2"],
+        ["GLU", "C(B|G)"],
+        ["GLN", "C(B|G)"],
+        ["ARG", "C(B|G|D)"],
+        ["LYS", "C(B|G|D|E)"],
+        ["MET", "(CB|CG|SD|CE)"],
+        ["PRO", "C(B|G|D)"]
     ],
-    "Sulf": ["CYS:SG", "MET:SD"]
+    "Sulf": [
+        ["CYS", "SG"],
+        ["MET", "SD"]
+    ]
 }
