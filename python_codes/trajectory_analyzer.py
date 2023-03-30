@@ -1,9 +1,12 @@
+import os.path
 import warnings
 from time import time
 from typing import List
 from pathlib import Path
 
 import numpy as np
+
+from scipy.stats import skew, kurtosis
 
 from sklearn.decomposition import PCA
 
@@ -71,16 +74,11 @@ def arg_median(data: np.ndarray):
     return np.argsort(data)[len(data) // 2]
 
 
-def main():
+def calculate_lchd_scores(universe: Universe,
+                          delta_frame: int,
+                          primitive_typing_scheme_path: Path) -> np.ndarray:
 
-    # Establish working directory and data sources
-    workdir = Path("./workdir/trajectory_analysis/ttr_forLoCoHD")
-    trajectory_path = workdir / "TTR_WT_opcMD_mcc_dt100.xtc"
-    structure_path = workdir / "TTR_WT_opcMD_grompp_onlyProt.tpr"
-    primitive_typing_scheme_path = Path("./primitive_typings/coarse_grained_with_centroid.config.json")
-
-    # Read the structure file and the trajectory
-    universe = mda.Universe(str(structure_path), str(trajectory_path))
+    print("Calculating the time-dependency of residue LoCoHD scores!")
 
     # Define the primitive typing scheme
     primitive_assigner = MDPrimitiveAssigner(primitive_typing_scheme_path)
@@ -94,9 +92,8 @@ def main():
     anchors = [(idx, idx) for idx, prat in enumerate(pra_templates_start) if prat.primitive_type == "Cent"]
 
     # Main loop
-    delta_frame = 25
-    full_trajectory_length = len(universe.trajectory[::delta_frame])
     all_points = list()
+    full_trajectory_length = len(universe.trajectory[::delta_frame])
     start_real_time = time()
 
     frame: Timestep
@@ -116,14 +113,45 @@ def main():
         eta *= (current_real_time - start_real_time) / (frame_idx + 1)  # current time / frame rate
         print(f"\r{frame_idx / full_trajectory_length:.1%} at time {frame.time:.0f} ps. ETA: {eta:.1f} s.", end="")
 
-    print("\nCalculations done! Starting to plot...")
-    all_points = np.array(all_points)
-    np.save(str(workdir / "LoCoHD_scores.npy"), all_points)
+    print("\nCalculations done!")
+    return np.array(all_points)
 
-    # Plotting of individual LoCoHD time dependencies
+
+def calculate_bimodality_coeff(universe: Universe, all_points: np.ndarray, workdir: Path):
+
+    print("Calculating bimodalities!")
+
+    lchd_skewnesses = skew(all_points, axis=0)
+    lchd_kurtoses = kurtosis(all_points, axis=0, fisher=False)
+
+    sarle_bimodality_coeff = (lchd_skewnesses ** 2 + 1) / lchd_kurtoses
+    bimodality_order = np.argsort(sarle_bimodality_coeff)[::-1]
+    residues = [f"{resi.segindex}.{resi.ix + 1}-{resi.resname}" for resi in universe.residues]
+    residues = np.array(residues)[bimodality_order]
+    sarle_bimodality_coeff = sarle_bimodality_coeff[bimodality_order]
+
+    out = ""
+    for resname, coeff in zip(residues, sarle_bimodality_coeff):
+        out += f"{resname}\t{coeff}\n"
+    out = out[:-1]
+
+    with open(workdir / "resi_bimodalities.txt", "w") as f:
+        f.write(out)
+
+    input()
+
+
+def plot_time_dependencies(universe: Universe,
+                           x_values: np.ndarray,
+                           all_points: np.ndarray,
+                           delta_frame: int,
+                           workdir: Path):
+
+    print("Plotting LoCoHD score time dependencies!")
+
     fig, ax = plt.subplots()
     plt.tight_layout()
-    x_values = np.arange(len(all_points)) * delta_frame * universe.trajectory.dt / 1000
+
     max_lchd = np.max(all_points)
     y_axis_ticks = np.arange(0, max_lchd, max_lchd / 10)
 
@@ -145,15 +173,20 @@ def main():
         median_lchd_time = median_lchd_idx * delta_frame * universe.trajectory.dt
         median_lchd_score = all_points[median_lchd_idx, plot_idx]
 
+        mean_lchd_score = np.mean(all_points[:, plot_idx])
+        std_lchd_score = np.std(all_points[:, plot_idx])
+
         legend_labels = list()
-        legend_labels.append(f"Max score: {max_lchd_score:.1%} at time: {max_lchd_time:.0f} ps")
+        legend_labels.append(f"Mean score: {mean_lchd_score:.1%}")
+        legend_labels.append(f"StD of the score: {std_lchd_score:.1%}")
         legend_labels.append(f"Median score: {median_lchd_score:.1%} at time: {median_lchd_time:.0f} ps")
+        legend_labels.append(f"Max score: {max_lchd_score:.1%} at time: {max_lchd_time:.0f} ps")
 
         legend_handles = Rectangle((0, 0), 1, 1, fc="white", ec="white", lw=0, alpha=0)
         legend_handles = [legend_handles, ] * len(legend_labels)
 
         ax.legend(legend_handles, legend_labels,
-                  loc="lower right", fontsize="small", fancybox=True,
+                  loc="upper left", fontsize="small", fancybox=True,
                   framealpha=0.7, handlelength=0, handletextpad=0)
         ax.plot(x_values, y_values, c="black")
         ax.set_xlabel("$t$ / ns")
@@ -163,12 +196,21 @@ def main():
         ax.set_ylim(0, max_lchd)
         fig.savefig(str(workdir / f"{plot_title}.png"), dpi=200, bbox_inches="tight")
 
-    print("\nPlotting for residues done! Plotting principal components...")
+    print("\nPlotting for residues done!")
+
+
+def plot_pca(x_values: np.ndarray, all_points: np.ndarray, workdir: Path):
+
+    print("Calculating and plotting LoCoHD principal components...")
+
+    fig, ax = plt.subplots()
+    fig.tight_layout()
+
+    # Skip the first frame, since it is an outlier (always 0)
+    pca = PCA()
+    principal_comp = pca.fit_transform(all_points[1:])
 
     # Plotting the first principal component's time dependency
-    # (Skip the first frame, since it is an outlier)
-    principal_comp = PCA(n_components=2).fit_transform(all_points[1:])
-
     ax.cla()
     ax.plot(x_values[1:], principal_comp[:, 0], c="black")
     ax.set_xlabel("$t$ / ns")
@@ -184,11 +226,34 @@ def main():
     ax.set_title("Time Evolution of the\nFirst Two Principal Components")
     fig.savefig(workdir / "pca_2.png", dpi=200, bbox_inches="tight")
 
-    print("Principal components plotted! Saving b-factor labelled pdb file...")
+    # Plotting the explained variance ratio of each component
+    ax.cla()
+    ax.set_xlabel("Rank of component")
+    ax.set_ylabel("Cumulative explained variance")
+    ax.set_title("Cumulative Explained Variance of\neach Principal Component")
 
-    # Saving a b-factor labelled structure
+    y_axis_ticks = np.arange(0, 1.1, 0.1)
+    ax.set_yticks(y_axis_ticks, labels=[f"{tick:.1%}" for tick in y_axis_ticks])
+    cumulative_expl_var = np.cumsum(pca.explained_variance_ratio_)
+    cumulative_expl_var = np.append([0, ], cumulative_expl_var)
+    ax.plot(np.arange(len(cumulative_expl_var)), cumulative_expl_var, c="black")
+    fig.savefig(workdir / "pca_explained_variance.png", dpi=200, bbox_inches="tight")
+
+    # Plotting the covariance matrix of the residues
+    ax.cla()
+    ax.imshow(pca.get_covariance())
+    ax.set_title("Covariance Matrix between the\nLoCoHD Scores of Residues")
+    fig.savefig(workdir / "pca_cov.png", dpi=200, bbox_inches="tight")
+
+    print("Principal components plotted!")
+
+
+def save_blabelled_pdb(universe: Universe, all_points: np.ndarray, workdir: Path):
+
+    print("Creating and Saving b-factor labelled pdb file")
+
     universe.add_TopologyAttr("tempfactors")
-    tempfactors = np.std(all_points[1:], axis=0)
+    tempfactors = np.std(all_points[1:], axis=0) * 100
 
     print(f"Created {len(tempfactors)} number of temperature factors...")
 
@@ -197,6 +262,44 @@ def main():
         resi.atoms.tempfactors += t_value
 
     universe.select_atoms("protein").write(str(workdir / "b_labelled.pdb"))
+
+
+def main():
+
+    # Establish working directory, data sources
+    workdir = Path("./workdir/trajectory_analysis/podocin_dimer")
+    trajectory_path = workdir / "podocin_wt_dimer_mcc_dt100.xtc"
+    structure_path = workdir / "podocin_wt_dimer_onlyProt.tpr"
+    primitive_typing_scheme_path = Path("./primitive_typings/coarse_grained_with_centroid.config.json")
+
+    # Read the structure file and the trajectory
+    universe = mda.Universe(str(structure_path), str(trajectory_path))
+
+    # Load in or calculate the LoCoHD data
+    delta_frame = 25
+    scores_path = workdir / "LoCoHD_scores.npy"
+    if os.path.exists(scores_path):
+        print("Already calculated scores found in the working directory! I will use them for the analysis!")
+        all_points = np.load(str(scores_path))
+    else:
+        all_points = calculate_lchd_scores(universe, delta_frame, primitive_typing_scheme_path)
+        np.save(str(scores_path), all_points)
+
+    # Set the time points at which we made the analysis
+    x_values = np.arange(len(all_points)) * delta_frame * universe.trajectory.dt / 1000
+    x_values += universe.trajectory[0].time / 1000
+
+    # Calculate the bimodality coefficient of the LoCoHD time dependence for every residue
+    calculate_bimodality_coeff(universe, all_points, workdir)
+
+    # Plotting the first principal component's time dependency
+    plot_pca(x_values, all_points, workdir)
+
+    # Saving a b-factor labelled structure
+    save_blabelled_pdb(universe, all_points, workdir)
+
+    # Plotting of individual LoCoHD time dependencies
+    plot_time_dependencies(universe, x_values, all_points, delta_frame, workdir)
 
 
 if __name__ == "__main__":
