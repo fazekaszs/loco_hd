@@ -138,8 +138,6 @@ def calculate_bimodality_coeff(universe: Universe, all_points: np.ndarray, workd
     with open(workdir / "resi_bimodalities.txt", "w") as f:
         f.write(out)
 
-    input()
-
 
 def plot_time_dependencies(universe: Universe,
                            x_values: np.ndarray,
@@ -167,10 +165,12 @@ def plot_time_dependencies(universe: Universe,
 
         max_lchd_idx = np.argmax(all_points[:, plot_idx])
         max_lchd_time = max_lchd_idx * delta_frame * universe.trajectory.dt
+        max_lchd_time += universe.trajectory[0].time
         max_lchd_score = all_points[max_lchd_idx, plot_idx]
 
         median_lchd_idx = arg_median(all_points[:, plot_idx])
         median_lchd_time = median_lchd_idx * delta_frame * universe.trajectory.dt
+        median_lchd_time += universe.trajectory[0].time
         median_lchd_score = all_points[median_lchd_idx, plot_idx]
 
         mean_lchd_score = np.mean(all_points[:, plot_idx])
@@ -195,6 +195,43 @@ def plot_time_dependencies(universe: Universe,
         ax.set_yticks(y_axis_ticks, labels=[f"{tick:.1%}" for tick in y_axis_ticks])
         ax.set_ylim(0, max_lchd)
         fig.savefig(str(workdir / f"{plot_title}.png"), dpi=200, bbox_inches="tight")
+
+    # Plotting of the mean (along residues) LoCoHD value's time dependency
+    mean_lchd_t = np.mean(all_points, axis=1)
+    ax.cla()
+
+    max_lchd_idx = np.argmax(mean_lchd_t)
+    max_lchd_time = max_lchd_idx * delta_frame * universe.trajectory.dt
+    max_lchd_time += universe.trajectory[0].time
+    max_lchd_score = mean_lchd_t[max_lchd_idx]
+
+    median_lchd_idx = arg_median(mean_lchd_t)
+    median_lchd_time = median_lchd_idx * delta_frame * universe.trajectory.dt
+    median_lchd_time += universe.trajectory[0].time
+    median_lchd_score = mean_lchd_t[median_lchd_idx]
+
+    mean_lchd_score = np.mean(mean_lchd_t)
+    std_lchd_score = np.std(mean_lchd_t)
+
+    legend_labels = list()
+    legend_labels.append(f"Mean score: {mean_lchd_score:.1%}")
+    legend_labels.append(f"StD of the score: {std_lchd_score:.1%}")
+    legend_labels.append(f"Median score: {median_lchd_score:.1%} at time: {median_lchd_time:.0f} ps")
+    legend_labels.append(f"Max score: {max_lchd_score:.1%} at time: {max_lchd_time:.0f} ps")
+
+    legend_handles = Rectangle((0, 0), 1, 1, fc="white", ec="white", lw=0, alpha=0)
+    legend_handles = [legend_handles, ] * len(legend_labels)
+
+    ax.legend(legend_handles, legend_labels,
+              loc="upper left", fontsize="small", fancybox=True,
+              framealpha=0.7, handlelength=0, handletextpad=0)
+    ax.plot(x_values, mean_lchd_t, c="black")
+    ax.set_xlabel("$t$ / ns")
+    ax.set_ylabel("LoCoHD score")
+    ax.set_title("Mean LoCoHD values")
+    ax.set_yticks(y_axis_ticks, labels=[f"{tick:.1%}" for tick in y_axis_ticks])
+    ax.set_ylim(0, max_lchd)
+    fig.savefig(str(workdir / f"mean_locohd.png"), dpi=200, bbox_inches="tight")
 
     print("\nPlotting for residues done!")
 
