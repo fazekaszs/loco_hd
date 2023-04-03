@@ -8,5 +8,9 @@ edition = "2021"
 name = "loco_hd"  # LoCo-HD = Local Composition Hellinger Distance
 crate-type = ["cdylib"]
 
-[dependencies]
-pyo3 = { version = "0.16.5", features = ["extension-module"] }
+[dependencies.pyo3]
+version = "0.18.1"
+
+[features]
+extension-module = ["pyo3/extension-module"]
+default = ["extension-module"]
