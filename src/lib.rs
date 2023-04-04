@@ -1,5 +1,5 @@
 mod locohd;
-use locohd::{WeightFunction, PrimitiveAtom, LoCoHD};
+pub use locohd::{WeightFunction, PrimitiveAtom, LoCoHD};
 
 use pyo3::prelude::*;
 

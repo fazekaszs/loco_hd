@@ -53,7 +53,7 @@ impl<'a> PMFSystem<'a> {
         Ok(())
     }
 
-    fn get_normalized_form(&self) -> PyResult<(Vec<f64>, Vec<f64>)> {
+    pub fn get_normalized_form(&self) -> PyResult<(Vec<f64>, Vec<f64>)> {
 
         let norm1 = self.pmf1.iter().sum::<usize>() as f64;
         let norm2 = self.pmf2.iter().sum::<usize>() as f64;

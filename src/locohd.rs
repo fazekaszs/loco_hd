@@ -1,15 +1,21 @@
+use std::collections::HashMap;
+use pyo3::{prelude::*, exceptions::PyValueError};
+
+#[cfg(test)]
+mod weight_function_utests;
 mod weight_function;
 pub use weight_function::WeightFunction;
 
-mod primitive_atom;
-pub use primitive_atom::PrimitiveAtom;
-
+#[cfg(test)]
+mod pmf_utests;
 mod pmf;
 use pmf::PMFSystem;
 
-use std::collections::HashMap;
+#[cfg(test)]
+mod locohd_utests;
 
-use pyo3::{prelude::*, exceptions::PyValueError};
+mod primitive_atom;
+pub use primitive_atom::PrimitiveAtom;
 
 fn euclidean_distance(vec_a: &Vec<f64>, vec_b: &Vec<f64>) -> f64 {
 
@@ -163,7 +169,7 @@ impl LoCoHD {
             let delta_w = self.w_func.integral_range(dists_b[dists_b.len() - 1], dists_a[idx_a])?;
             h_integral += delta_w * current_hdist;
 
-            pmf_system.update_pmf2(&seq_a[idx_a])?;
+            pmf_system.update_pmf1(&seq_a[idx_a])?;
 
             // Finishing the dists_a list.
             while idx_a < seq_a.len() - 1 {
@@ -174,7 +180,7 @@ impl LoCoHD {
                 let delta_w = self.w_func.integral_range(dists_a[idx_a - 1], dists_a[idx_a])?;
                 h_integral += delta_w * current_hdist;
 
-                pmf_system.update_pmf2(&seq_a[idx_a])?;
+                pmf_system.update_pmf1(&seq_a[idx_a])?;
             }
 
             // Last integral until infinity.

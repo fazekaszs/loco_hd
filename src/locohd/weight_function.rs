@@ -44,7 +44,7 @@ impl WeightFunction {
                 length_assert(3)?;
 
                 let err_msg = format!("For function \"{}\" all parameters must be positive!", function_name);
-                if parameters[0] <= 0f64 && parameters[1] < 0f64 && parameters[2] < 0f64 { return Err(PyValueError::new_err(err_msg)); }
+                if parameters[0] < 0f64 || parameters[1] < 0f64 || parameters[2] < 0f64 { return Err(PyValueError::new_err(err_msg)); }
 
                 cdfs::dagum
             },
@@ -74,7 +74,7 @@ impl WeightFunction {
                 if parameters[0] < 0f64 { return Err(PyValueError::new_err(err_msg)); }
 
                 let err_msg = format!("For function \"{}\" after the first parameter all parameters must be positive!", function_name);
-                if parameters[1] <= 0f64 && parameters[2] <= 0f64 && parameters[3] <= 0f64 { return Err(PyValueError::new_err(err_msg)); }
+                if parameters[1] <= 0f64 || parameters[2] <= 0f64 || parameters[3] <= 0f64 { return Err(PyValueError::new_err(err_msg)); }
 
                 let err_msg = format!("For function \"{}\" the first parameter must be smaller than the second!", function_name);
                 if parameters[0] >= parameters[1] { return Err(PyValueError::new_err(err_msg)); }
@@ -117,61 +117,5 @@ impl WeightFunction {
 
     pub fn integral_range(&self, point_from: f64, point_to: f64) -> PyResult<f64> {
         Ok(self.integral_point(point_to)? - self.integral_point(point_from)?)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-
-    #[test]
-    fn build_hyper_exp_ok() -> PyResult<()> {
-
-        let test_params = vec![
-            vec![1., 1.],
-            vec![0.5, 1., 0.5, 2.],
-            vec![0.33, 3., 0.33, 5., 0.33, 10.]
-        ];
-
-        for pars in test_params {
-            WeightFunction::build("hyper_exp".to_owned(), pars)?;
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn build_dagum_ok() -> PyResult<()> {
-
-        let test_params = vec![
-            vec![1., 1., 1.],
-            vec![0.5, 1., 1.],
-            vec![1., 0.5, 1.],
-            vec![1., 1., 0.5]
-        ];
-
-        for pars in test_params {
-            WeightFunction::build("dagum".to_owned(), pars)?;
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn build_uniform_ok() -> PyResult<()> {
-
-        let test_params = vec![
-            vec![3., 10.],
-            vec![2., 16.],
-            vec![0., 12.5],
-            vec![0., 200.]
-        ];
-
-        for pars in test_params {
-            WeightFunction::build("uniform".to_owned(), pars)?;
-        }
-
-        Ok(())
     }
 }
