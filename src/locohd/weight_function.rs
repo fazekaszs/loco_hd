@@ -102,10 +102,10 @@ impl WeightFunction {
         Ok((self.function)(&self.parameters, point))
     }
 
-    pub fn integral_vec(&self, range: Vec<f64>) -> PyResult<Vec<f64>> {
+    pub fn integral_vec(&self, points: Vec<f64>) -> PyResult<Vec<f64>> {
 
         let mut output = Vec::new();
-        for x in range {
+        for x in points {
             match self.integral_point(x) {
                 Ok(result) => output.push(result),
                 Err(err) => return Err(err)

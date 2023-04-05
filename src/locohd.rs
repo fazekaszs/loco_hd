@@ -1,5 +1,10 @@
 use std::collections::HashMap;
-use pyo3::{prelude::*, exceptions::PyValueError};
+
+use pyo3::prelude::*;
+use pyo3::exceptions::PyValueError;
+
+use rayon::prelude::*;
+use rayon::iter::ParallelIterator;
 
 #[cfg(test)]
 mod weight_function_utests;
@@ -17,35 +22,7 @@ mod locohd_utests;
 mod primitive_atom;
 pub use primitive_atom::PrimitiveAtom;
 
-fn euclidean_distance(vec_a: &Vec<f64>, vec_b: &Vec<f64>) -> f64 {
-
-    assert_eq!(vec_a.len(), vec_b.len(), 
-        "vec_a and vec_b must have same dimensions, but got instead {} and {}!", vec_a.len(), vec_b.len());
-            
-    let mut distance = 0.;
-    for (&item_a, &item_b) in vec_a.iter().zip(vec_b) {
-        distance += (item_a - item_b).powf(2.);
-    }
-    distance.powf(0.5)
-}
-
-// Define the parallel_sort function, which co-sorts a distance matrix line with a list of categories.
-fn parallel_sort(dists: &Vec<f64>, cats: &Vec<String>) -> (Vec<f64>, Vec<String>) {
-
-    let mut mask = (0..dists.len()).collect::<Vec<usize>>();
-    mask.sort_by(|&idx1, &idx2| dists[idx1].partial_cmp(&dists[idx2]).unwrap());
-
-    let mut new_dmx_line = vec![];
-    let mut new_cat = vec![];
-
-    for &idx in mask.iter() {
-        new_dmx_line.push(dists[idx]);
-        new_cat.push(cats[idx].clone());
-    }
-
-    (new_dmx_line, new_cat)
-    
-}
+mod utils;
 
 #[pyclass]
 pub struct LoCoHD {
@@ -202,60 +179,70 @@ impl LoCoHD {
     }
 
     /// Compares two structures with a given sequence pair of categories (seq_a and seq_b) 
-    /// and a given distance matrix pair (dmx_a and dmx_b). 
-    #[pyo3(text_signature = "(seq_a, seq_b, dmx_a, dists_b, /)")]
-    fn from_dmxs(&self, seq_a: Vec<String>, seq_b: Vec<String>, dmx_a: Vec<Vec<f64>>, dmx_b: Vec<Vec<f64>>) -> Vec<f64> {
+    /// and a given distance matrix pair (dmx_a and dmx_b).
+    fn from_dmxs(&self, 
+        seq_a: Vec<String>, 
+        seq_b: Vec<String>, 
+        dmx_a: Vec<Vec<f64>>, 
+        dmx_b: Vec<Vec<f64>>) -> PyResult<Vec<f64>>
+    {
 
         // Check input validity.
-        assert_eq!(dmx_a.len(), dmx_b.len(),
-            "Only structures with the same size are comparable!"
-        );
+        if dmx_a.len() != dmx_b.len() {
 
-        // Create the line-by-line comparison of the two distance matrices.
-        let mut output = vec![];
-
-        for idx in 0..dmx_a.len() {
-
-            let (new_dmx_line_a, new_seq_a) = parallel_sort(&dmx_a[idx], &seq_a);
-            let (new_dmx_line_b, new_seq_b) = parallel_sort(&dmx_b[idx], &seq_b);
-            output.push(self.from_anchors(new_seq_a, new_seq_b, new_dmx_line_a, new_dmx_line_b).unwrap());
+            let err_msg = format!(
+                "Expected matrices with the same lengt, got lengths {} and {}!", 
+                dmx_a.len(), 
+                dmx_b.len()
+            );
+            return Err(PyValueError::new_err(err_msg));
         }
 
-        output
+        let (output_ok, output_err): (Vec<_>, Vec<_>) = dmx_a
+            .par_iter()
+            .zip(&dmx_b)
+            .map(|(row_a, row_b)| {
+                let (current_dists_a, current_seq_a) = utils::sort_together(row_a, &seq_a);
+                let (current_dists_b, current_seq_b) = utils::sort_together(row_b, &seq_b);
+                self.from_anchors(current_seq_a, current_seq_b, current_dists_a, current_dists_b)
+            })
+            .partition(Result::is_ok);
+
+        if output_err.len() > 0 {
+            let err_msg = "The from_anchors function returned an error during the LoCoHD calculations!".to_owned();
+            return Err(PyValueError::new_err(err_msg));
+        }
+
+        let output_ok = output_ok.into_iter().map(|x| x.unwrap()).collect();
+
+        Ok(output_ok)
+
     }
 
     /// Compares two structures with a given sequence pair of categories (coords_a and coords_b) 
     /// and a given coordinate-set pair (dmx_a and dmx_b). It calculates the distance matrices
-    /// with the p2 (Euclidean) metric.
-    #[pyo3(text_signature = "(seq_a, seq_b, coords_a, coords_b, /)")]
-    fn from_coords(&self, seq_a: Vec<String>, seq_b: Vec<String>, coords_a: Vec<Vec<f64>>, coords_b: Vec<Vec<f64>>) -> Vec<f64> {
+    /// with the L2 (Euclidean) metric.
+    fn from_coords(&self, 
+        seq_a: Vec<String>, 
+        seq_b: Vec<String>, 
+        coords_a: Vec<Vec<f64>>, 
+        coords_b: Vec<Vec<f64>>) -> PyResult<Vec<f64>>
+    {
 
-        let calculate_dmx = |coords: &Vec<Vec<f64>>| {
+        let dmx_a = utils::calculate_distance_matrix(&coords_a);
+        let dmx_b = utils::calculate_distance_matrix(&coords_b);
 
-            let mut distance_mx = vec![vec![0.; coords.len()]; coords.len()];
-            
-            for idx1 in 0..coords.len() {
-                for idx2 in idx1 + 1..coords.len() {
-                    let distance = euclidean_distance(&coords[idx1], &coords[idx2]);
-                    distance_mx[idx1][idx2] = distance;
-                    distance_mx[idx2][idx1] = distance;
-                }
-            }
-            distance_mx
-        };
-
-        self.from_dmxs(seq_a, seq_b, calculate_dmx(&coords_a), calculate_dmx(&coords_b))
-
+        self.from_dmxs(seq_a, seq_b, dmx_a, dmx_b)
     }
 
     /// Compares two structures with a given primitive atom sequence pair.
-    #[pyo3(text_signature = "(prim_a, prim_b, anchor_pairs, only_hetero_contacts, threshold_distance, /)")]
     fn from_primitives(&self, 
         prim_a: Vec<PrimitiveAtom>, 
         prim_b: Vec<PrimitiveAtom>, 
         anchor_pairs: Vec<(usize, usize)>, 
         only_hetero_contacts: bool,
-        threshold_distance: f64) -> Vec<f64> {
+        threshold_distance: f64) -> Vec<f64> 
+    {
 
         let mut dmx_a: HashMap<(usize, usize), f64> = HashMap::new();
         let mut dmx_b: HashMap<(usize, usize), f64> = HashMap::new();
@@ -284,7 +271,7 @@ impl LoCoHD {
                 let dist = match dmx_a.get(&idx_pair) {
                     Some(&dist) => dist,
                     None => {
-                        let dist = euclidean_distance(&prim_a[idx_a1].coordinates, &prim_a[idx_a2].coordinates);
+                        let dist = utils::euclidean_distance(&prim_a[idx_a1].coordinates, &prim_a[idx_a2].coordinates);
                         dmx_a.insert(idx_pair, dist);
                         dist
                     }
@@ -318,7 +305,7 @@ impl LoCoHD {
                 let dist = match dmx_b.get(&idx_pair) {
                     Some(&dist) => dist,
                     None => {
-                        let dist = euclidean_distance(&prim_b[idx_b1].coordinates, &prim_b[idx_b2].coordinates);
+                        let dist = utils::euclidean_distance(&prim_b[idx_b1].coordinates, &prim_b[idx_b2].coordinates);
                         dmx_b.insert(idx_pair, dist);
                         dist
                     }
@@ -332,8 +319,8 @@ impl LoCoHD {
                 seq_b.push(prim_b[idx_b2].primitive_type.clone());
             }
 
-            let (dists_a, seq_a) = parallel_sort(&dists_a, &seq_a);
-            let (dists_b, seq_b) = parallel_sort(&dists_b, &seq_b);
+            let (dists_a, seq_a) = utils::sort_together(&dists_a, &seq_a);
+            let (dists_b, seq_b) = utils::sort_together(&dists_b, &seq_b);
 
             output.push(
                 self.from_anchors(seq_a, seq_b, dists_a, dists_b).unwrap()
