@@ -48,6 +48,7 @@ class TypingSchemeElement:
     primitive_type: str
     residue_matcher: re.Pattern
     atom_matcher: re.Pattern
+    atom_counter: Union[int, str]
 
     def match_resi(self, resi_name: str) -> bool:
         return self.residue_matcher.fullmatch(resi_name) is not None
@@ -64,18 +65,20 @@ class PrimitiveAssigner:
 
     def __init__(self, config_path: Path):
 
+        config_type = Dict[str, List[Tuple[str, str, Union["any", int]]]]
         with open(config_path, "r") as f:
-            config: Dict[str, List[List[str]]] = json.load(f)
+            config: config_type = json.load(f)
 
         self.scheme: List[TypingSchemeElement] = list()
         for primitive_type, scheme_elements in config.items():
 
-            for residue_matcher, atom_matcher in scheme_elements:
+            for element in scheme_elements:
 
-                c_residue_matcher = re.compile(residue_matcher)
-                c_atom_matcher = re.compile(atom_matcher)
+                c_residue_matcher = re.compile(element[0])
+                c_atom_matcher = re.compile(element[1])
+                atom_counter = 1 if len(element) == 2 else element[2]
 
-                new_element = TypingSchemeElement(primitive_type, c_residue_matcher, c_atom_matcher)
+                new_element = TypingSchemeElement(primitive_type, c_residue_matcher, c_atom_matcher, atom_counter)
                 self.scheme.append(new_element)
 
     @property
@@ -113,7 +116,11 @@ class PrimitiveAssigner:
                     atom_names.append(atom.name)
                     atom_coords.append(atom.coord)
 
-                if len(atom_coords) == 0:
+                if tse.atom_counter == "any":
+                    pass
+                elif tse.atom_counter == len(atom_coords):
+                    pass
+                else:
                     continue
 
                 centroid = np.mean(atom_coords, axis=0)

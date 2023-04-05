@@ -1,4 +1,4 @@
-import os.path
+import os
 import warnings
 from time import time
 from typing import List
@@ -17,7 +17,7 @@ from MDAnalysis.coordinates.base import Timestep
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 
-from loco_hd import LoCoHD, PrimitiveAtom
+from loco_hd import LoCoHD, PrimitiveAtom, WeightFunction
 from atom_converter_utils import PrimitiveAssigner, PrimitiveAtomTemplate, PrimitiveAtomSource
 
 warnings.filterwarnings("ignore")
@@ -51,7 +51,11 @@ class MDPrimitiveAssigner(PrimitiveAssigner):
                     atom_names.append(atom.name)
                     atom_coords.append(frame.positions[atom.ix])
 
-                if len(atom_coords) == 0:
+                if tse.atom_counter == "any":
+                    pass
+                elif tse.atom_counter == len(atom_coords):
+                    pass
+                else:
                     continue
 
                 centroid = np.mean(atom_coords, axis=0)
@@ -84,7 +88,8 @@ def calculate_lchd_scores(universe: Universe,
     primitive_assigner = MDPrimitiveAssigner(primitive_typing_scheme_path)
 
     # Define the LoCoHD instance
-    lchd = LoCoHD(primitive_assigner.all_primitive_types, ("uniform", [3, 10]))
+    w_func = WeightFunction("uniform", [3, 10])
+    lchd = LoCoHD(primitive_assigner.all_primitive_types, w_func)
 
     # Get the primitive atoms for the first frame and also define the anchor atoms
     pra_templates_start = primitive_assigner.assign_from_universe(universe.trajectory[0], universe)

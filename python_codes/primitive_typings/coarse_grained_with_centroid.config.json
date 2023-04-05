@@ -1,6 +1,6 @@
 {
     "Cent": [
-        [".+", "[^H].*"]
+        [".+", "[^H].*", "any"]
     ],
     "AmideC": [
         [".+", "C"],
@@ -17,28 +17,28 @@
         ["LYS", "NZ"]
     ],
     "Neg": [
-        [".+", "OT(1|2)"], [".+", "OC(1|2)"], [".+", "(O|OXT)"],
-        ["GLU", "OE(1|2)"],
-        ["ASP", "OD(1|2)"]
+        [".+", "OT(1|2)", 2], [".+", "OC(1|2)", 2], [".+", "(O|OXT)", 2],
+        ["GLU", "OE(1|2)", 2],
+        ["ASP", "OD(1|2)", 2]
     ],
     "Aro": [
-        ["PHE", "C(G|Z)"],
-        ["TYR", "G(G|Z)"],
-        ["TRP", "C(D|H)2"], ["TRP", "(CG|CD1|CD2|NE1|NE2|CE2)"],
-        ["HIS", "(CG|ND1|CD2|CE1|NE2)"]
+        ["PHE", "C(G|Z)", 2],
+        ["TYR", "C(G|Z)", 2],
+        ["TRP", "C(D|H)2", 2], ["TRP", "(CG|CD1|CD2|NE1|CE2)", 5],
+        ["HIS", "(CG|ND1|CD2|CE1|NE2)", 5]
     ],
     "Ali": [
         ["ALA", "CB"],
-        ["VAL", "(CB|CG1|CG2)"],
-        ["ILE", "(CB|CG1|CG2|CD1)"],
-        ["LEU", "(CB|CG|CD1|CD2)"],
+        ["VAL", "(CB|CG1|CG2)", 3],
+        ["ILE", "(CB|CG1|CG2|CD1)", 4],
+        ["LEU", "(CB|CG|CD1|CD2)", 4],
         ["THR", "CG2"],
-        ["GLU", "C(B|G)"],
-        ["GLN", "C(B|G)"],
-        ["ARG", "C(B|G|D)"],
-        ["LYS", "C(B|G|D|E)"],
-        ["MET", "(CB|CG|SD|CE)"],
-        ["PRO", "C(B|G|D)"]
+        ["GLU", "C(B|G)", 2],
+        ["GLN", "C(B|G)", 2],
+        ["ARG", "C(B|G|D)", 3],
+        ["LYS", "C(B|G|D|E)", 4],
+        ["MET", "(CB|CG|SD|CE)", 4],
+        ["PRO", "C(B|G|D)", 3]
     ],
     "Sulf": [
         ["CYS", "SG"],

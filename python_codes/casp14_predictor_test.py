@@ -13,7 +13,7 @@ from typing import List, Dict, Tuple
 from matplotlib.patches import Rectangle
 from scipy.stats import spearmanr
 
-from loco_hd import LoCoHD, PrimitiveAtom
+from loco_hd import LoCoHD, PrimitiveAtom, WeightFunction
 from atom_converter_utils import PrimitiveAssigner, PrimitiveAtomTemplate
 
 
@@ -190,7 +190,8 @@ def main():
     primitive_assigner = PrimitiveAssigner(Path("./primitive_typings/all_atom_with_centroid.config.json"))
 
     # Create the LoCoHD instance.
-    lchd = LoCoHD(primitive_assigner.all_primitive_types, ("uniform", [3, 10]))
+    w_func = WeightFunction("uniform", [3, 10])
+    lchd = LoCoHD(primitive_assigner.all_primitive_types, w_func)
 
     # The values in the structures dict are also dicts. The first key refers to the
     # structure name (like T1024), while the second key is either "true" (referring to the true structure)
@@ -246,7 +247,7 @@ def main():
             lddt_scores = list()
             key1 = f"{structure_key}{PREDICTOR_KEY}_{pred_id}"
             for anchor, _ in anchors:
-                key2 = true_prim_atoms[anchor].id
+                key2 = true_prim_atoms[anchor].tag
                 lddt_scores.append(lddt_dict[key1][key2])
 
             # Calculating the Spearman's correlation coefficient

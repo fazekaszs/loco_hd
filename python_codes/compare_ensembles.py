@@ -16,7 +16,7 @@ from Bio.PDB.Residue import Residue
 from Bio.PDB.Atom import Atom
 from Bio.PDB.PDBIO import PDBIO, Select
 
-from loco_hd import LoCoHD
+from loco_hd import LoCoHD, WeightFunction
 from atom_converter_utils import PrimitiveAssigner, PrimitiveAtomTemplate
 
 ATOM_ID = Tuple[int, str]
@@ -156,7 +156,8 @@ def compare_structures(prot_root_path: Path, save_dir: Path, save_name: str) -> 
     primitive_assigner = PrimitiveAssigner(Path("primitive_typings/coarse_grained.config.json"))
 
     # Initialize LoCoHD instance
-    lchd = LoCoHD(primitive_assigner.all_primitive_types, ("uniform", [3., 10.]))
+    w_func = WeightFunction("uniform", [3., 10.])
+    lchd = LoCoHD(primitive_assigner.all_primitive_types, w_func)
 
     # Collect all the filenames in the directory
     all_files: List[str] = os.listdir(prot_root_path)
@@ -306,13 +307,13 @@ def main():
     save_dir = Path("./workdir/prot_batch_resuls")
     paths_and_names = [
         # ("./workdir/pdb_files/h5", "h5_dummy"),
-        # ("/home/fazekaszs/CoreDir/PhD/PDB/H5/277", "h5_277"),
-        # ("/home/fazekaszs/CoreDir/PhD/PDB/H5/288", "h5_288"),
-        # ("/home/fazekaszs/CoreDir/PhD/PDB/H5/299", "h5_299"),
-        # ("/home/fazekaszs/CoreDir/PhD/PDB/H5/310", "h5_310"),
-        # ("/home/fazekaszs/CoreDir/PhD/PDB/H5/321", "h5_321"),
+        ("/home/fazekaszs/CoreDir/PhD/PDB/H5/277", "h5_277"),
+        ("/home/fazekaszs/CoreDir/PhD/PDB/H5/288", "h5_288"),
+        ("/home/fazekaszs/CoreDir/PhD/PDB/H5/299", "h5_299"),
+        ("/home/fazekaszs/CoreDir/PhD/PDB/H5/310", "h5_310"),
+        ("/home/fazekaszs/CoreDir/PhD/PDB/H5/321", "h5_321"),
         # ("./workdir/pdb_files/PED00075e000", "PED00075e000"),
-        ("./workdir/pdb_files/PED00072e000", "PED00072e000"),
+        # ("./workdir/pdb_files/PED00072e000", "PED00072e000"),
     ]
 
     rmsd_dmxs, lchd_dmxs, lchd_by_atom = list(), list(), list()
