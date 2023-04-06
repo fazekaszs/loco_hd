@@ -1,10 +1,10 @@
-use std::collections::HashMap;
-
 use pyo3::prelude::*;
 use pyo3::exceptions::PyValueError;
 
 use rayon::prelude::*;
 use rayon::iter::ParallelIterator;
+
+use kd_tree::KdTree;
 
 #[cfg(test)]
 mod weight_function_utests;
@@ -225,8 +225,8 @@ impl LoCoHD {
     fn from_coords(&self, 
         seq_a: Vec<String>, 
         seq_b: Vec<String>, 
-        coords_a: Vec<Vec<f64>>, 
-        coords_b: Vec<Vec<f64>>) -> PyResult<Vec<f64>>
+        coords_a: Vec<[f64; 3]>, 
+        coords_b: Vec<[f64; 3]>) -> PyResult<Vec<f64>>
     {
 
         let dmx_a = utils::calculate_distance_matrix(&coords_a);
@@ -241,92 +241,86 @@ impl LoCoHD {
         prim_b: Vec<PrimitiveAtom>, 
         anchor_pairs: Vec<(usize, usize)>, 
         only_hetero_contacts: bool,
-        threshold_distance: f64) -> Vec<f64> 
+        threshold_distance: f64) -> PyResult<Vec<f64>>
     {
 
-        let mut dmx_a: HashMap<(usize, usize), f64> = HashMap::new();
-        let mut dmx_b: HashMap<(usize, usize), f64> = HashMap::new();
+        // Build KdTrees from the first and second structures. Since the KdPoint trait is
+        // implemented on the &PrimitiveAtom type (note the reference!) it is possible to
+        // use prim_a and prim_b (almost) directly.
+        let kdtree_a = KdTree::build_by_ordered_float(
+            prim_a.iter().collect::<Vec<_>>()
+        );
 
-        let mut output = vec![];
-        
-        for &(idx_a1, idx_b1) in anchor_pairs.iter() {
+        let kdtree_b = KdTree::build_by_ordered_float(
+            prim_b.iter().collect::<Vec<_>>()
+        );
 
-            let mut dists_a: Vec<f64> = vec![];
-            let mut seq_a: Vec<String> = vec![];
+        // Calculate the environment LoCoHD scores paralelly for each anchor pair.
+        let (output_ok, output_err): (Vec<_>, Vec<_>) = anchor_pairs
+            .par_iter()
+            .map(|&(idx1, idx2)| {
 
-            for idx_a2 in 0..prim_a.len() {
+                // Search for the neighbour (environment) atoms of the anchor atom in the first structure.
+                // Also, filter out homo residue contacts if necessary (based on the tag field).
+                let neighbours_a = kdtree_a.within_radius(&prim_a[idx1].coordinates, threshold_distance);
+                let neighbours_a = neighbours_a.into_iter().filter(|&p| 
+                    p.tag != prim_a[idx1].tag || !only_hetero_contacts
+                );
 
-                if idx_a1 == idx_a2 {
-                    dists_a.push(0.);
-                    seq_a.push(prim_a[idx_a1].primitive_type.clone());
-                    continue;
+                // Initialize the primitive type sequence and distances for the first environment.
+                let mut env_a_seq = vec![];
+                let mut env_a_dists = vec![];
+
+                // If only_hetero_contacts is true, then we have to put back the anchor atom
+                // into the environment, since we have just filtered it out.
+                if only_hetero_contacts {
+                    env_a_seq.push(prim_a[idx1].primitive_type.clone());
+                    env_a_dists.push(0f64);
                 }
 
-                if prim_a[idx_a1].tag == prim_a[idx_a2].tag && only_hetero_contacts {
-                    continue;
+                // Collect the primitive type sequence and distances for the first environment.
+                for env_a_neighbour in neighbours_a {
+                    env_a_seq.push(env_a_neighbour.primitive_type.clone());
+                    env_a_dists.push(utils::euclidean_distance(prim_a[idx1].coordinates, env_a_neighbour.coordinates));
                 }
 
-                let idx_pair = if idx_a1 > idx_a2 { (idx_a2, idx_a1) } else { (idx_a1, idx_a2) };
+                // Sort the distances and sequence together.
+                let (env_a_dists, env_a_seq) = utils::sort_together(&env_a_dists, &env_a_seq);
 
-                let dist = match dmx_a.get(&idx_pair) {
-                    Some(&dist) => dist,
-                    None => {
-                        let dist = utils::euclidean_distance(&prim_a[idx_a1].coordinates, &prim_a[idx_a2].coordinates);
-                        dmx_a.insert(idx_pair, dist);
-                        dist
-                    }
-                };
+                // Do the same thing with the second environment.
 
-                if dist > threshold_distance {
-                    continue;
+                let neighbours_b = kdtree_b.within_radius(&prim_b[idx2].coordinates, threshold_distance);
+                let neighbours_b = neighbours_b.into_iter().filter(|&p| 
+                    p.tag != prim_b[idx2].tag || !only_hetero_contacts
+                );
+
+                let mut env_b_seq = vec![];
+                let mut env_b_dists = vec![];
+
+                if only_hetero_contacts {
+                    env_b_seq.push(prim_b[idx2].primitive_type.clone());
+                    env_b_dists.push(0f64);
                 }
 
-                dists_a.push(dist);                
-                seq_a.push(prim_a[idx_a2].primitive_type.clone());
-            }
-
-            let mut dists_b: Vec<f64> = vec![];
-            let mut seq_b: Vec<String> = vec![];
-
-            for idx_b2 in 0..prim_b.len() {
-
-                if idx_b1 == idx_b2 {
-                    dists_b.push(0.);
-                    seq_b.push(prim_b[idx_b1].primitive_type.clone());
-                    continue;
+                for env_b_neighbour in neighbours_b {
+                    env_b_seq.push(env_b_neighbour.primitive_type.clone());
+                    env_b_dists.push(utils::euclidean_distance(prim_b[idx2].coordinates, env_b_neighbour.coordinates));
                 }
 
-                if prim_b[idx_b1].tag == prim_b[idx_b2].tag && only_hetero_contacts {
-                    continue;
-                }
+                let (env_b_dists, env_b_seq) = utils::sort_together(&env_b_dists, &env_b_seq);
+                
+                // Return the LoCoHD score.
+                self.from_anchors(env_a_seq, env_b_seq, env_a_dists, env_b_dists)
+        })
+        .partition(Result::is_ok);
 
-                let idx_pair = if idx_b1 > idx_b2 { (idx_b2, idx_b1) } else { (idx_b1, idx_b2) };
-
-                let dist = match dmx_b.get(&idx_pair) {
-                    Some(&dist) => dist,
-                    None => {
-                        let dist = utils::euclidean_distance(&prim_b[idx_b1].coordinates, &prim_b[idx_b2].coordinates);
-                        dmx_b.insert(idx_pair, dist);
-                        dist
-                    }
-                };
-
-                if dist > threshold_distance {
-                    continue;
-                }
-
-                dists_b.push(dist);
-                seq_b.push(prim_b[idx_b2].primitive_type.clone());
-            }
-
-            let (dists_a, seq_a) = utils::sort_together(&dists_a, &seq_a);
-            let (dists_b, seq_b) = utils::sort_together(&dists_b, &seq_b);
-
-            output.push(
-                self.from_anchors(seq_a, seq_b, dists_a, dists_b).unwrap()
-            );
+        if output_err.len() > 0 {
+            let err_msg = "The from_anchors function returned an error during the LoCoHD calculations!".to_owned();
+            return Err(PyValueError::new_err(err_msg));
         }
 
-        output
+        let output_ok = output_ok.into_iter().map(|x| x.unwrap()).collect();
+
+        Ok(output_ok)
     }
 }

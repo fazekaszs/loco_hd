@@ -17,3 +17,9 @@ default = ["extension-module"]
 
 [dependencies.rayon]
 version = "1.7.0"
+
+[dependencies.kd-tree]
+version = "0.5.1"
+
+[dependencies.typenum]
+version = "1.16.0"
