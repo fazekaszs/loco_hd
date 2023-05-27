@@ -5,12 +5,13 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
-name = "loco_hd"  # LoCoHD = Local Composition Hellinger Distance
+name = "loco_hd"
 crate-type = ["cdylib"]
 
 [dependencies.pyo3]
 version = "0.18.1"
 
+# This is required for running the unit-tests with PyO3 without an error.
 [features]
 extension-module = ["pyo3/extension-module"]
 default = ["extension-module"]
@@ -21,5 +22,6 @@ version = "1.7.0"
 [dependencies.kd-tree]
 version = "0.5.1"
 
+# This is required for the KdPoint trait implementation.
 [dependencies.typenum]
 version = "1.16.0"
