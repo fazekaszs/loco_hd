@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from loco_hd import LoCoHD
+from loco_hd import WeightFunction
 
 
 def main():
@@ -24,15 +24,16 @@ def main():
     for param_set in param_sets:
 
         fig, ax = plt.subplots()
-        lchd = LoCoHD([], param_set)
+        weight_function = WeightFunction(*param_set)
 
-        y_values = np.array(lchd.test_integrator(x_values))
+        y_values = np.array(weight_function.integral_vec(x_values))
         y_prime_values = (y_values[1:] - y_values[:-1]) / x_delta
 
         ax.plot(x_values, y_values)
         ax.plot(x_values[1:], y_prime_values)
 
-        test_name = f"{param_set[0]}_p{'p'.join(map(str, param_set[1]))}.png"
+        num_params_str = "p".join(map(lambda x: f"{x:.3f}", param_set[1]))
+        test_name = f"{param_set[0]}_p{num_params_str}.png"
 
         fig.savefig(f"./workdir/integrator_tests/{test_name}", dpi=300)
 

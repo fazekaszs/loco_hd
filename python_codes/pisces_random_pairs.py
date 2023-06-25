@@ -15,13 +15,13 @@ from scipy import stats
 from Bio.PDB.PDBParser import PDBParser
 from Bio.PDB.Model import Model
 
-from loco_hd import LoCoHD, PrimitiveAtom
-from atom_converter_utils import PrimitiveAssigner, PrimitiveAtomTemplate
+from loco_hd import LoCoHD, PrimitiveAtom, WeightFunction, PrimitiveAssigner, PrimitiveAtomTemplate
 
 
 def is_anchor_atom(pra_template: PrimitiveAtomTemplate) -> bool:
 
-    return len(pra_template.atom_source.source_atom) == 0
+    # return len(pra_template.atom_source.source_atom) == 0
+    return pra_template.primitive_type == "Cent"
 
 
 def get_anchors_and_primitive_atoms(pra_templates: List[PrimitiveAtomTemplate],
@@ -76,6 +76,7 @@ def main():
 
     # Initialize the assigner and locohd
     primitive_assigner = PrimitiveAssigner(assigner_config_path)
+    weight_function = WeightFunction(*weight_function)
     lchd = LoCoHD(primitive_assigner.all_primitive_types, weight_function)
 
     # Collect the PDB file names
@@ -129,8 +130,8 @@ def main():
 
         cumulative_results = list()
         for anchor, lchd_score in zip(anchor_pairs, lchd_scores):
-            pair_id1 = f"{pdb_id1}/{primitive_atoms1[anchor[0]].id}"
-            pair_id2 = f"{pdb_id2}/{primitive_atoms2[anchor[1]].id}"
+            pair_id1 = f"{pdb_id1}/{primitive_atoms1[anchor[0]].tag}"
+            pair_id2 = f"{pdb_id2}/{primitive_atoms2[anchor[1]].tag}"
             cumulative_results.append((pair_id1, pair_id2, lchd_score))
 
         if os.path.exists(workdir_path / output_filename):

@@ -13,8 +13,7 @@ from typing import List, Dict, Tuple
 from matplotlib.patches import Rectangle
 from scipy.stats import spearmanr
 
-from loco_hd import LoCoHD, PrimitiveAtom, WeightFunction
-from atom_converter_utils import PrimitiveAssigner, PrimitiveAtomTemplate
+from loco_hd import LoCoHD, PrimitiveAtom, WeightFunction, PrimitiveAssigner, PrimitiveAtomTemplate
 
 
 # Set the necessary paths. The available predictor keys are the following:

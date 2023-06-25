@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from loco_hd import LoCoHD
+from loco_hd import LoCoHD, WeightFunction
 
 
 def main():
@@ -9,17 +9,17 @@ def main():
     categories = list(map(str, range(6)))
     deltas = [0., 1., 2., 4., 8., 16., 32., 64.]
     n_of_points = 100
-    n_of_dims = 3
 
     # lchd = LoCoHD(categories, ("kumaraswamy", [0., 3.0, 2., 5.]))
-    lchd = LoCoHD(categories, ("hyper_exp", [1., 1.]))
-    points = np.random.uniform(0., 1., size=(n_of_points, n_of_dims))
+    weight_function = WeightFunction("hyper_exp", [1., 1.])
+    lchd = LoCoHD(categories, weight_function)
+    points = np.random.uniform(0., 1., size=(n_of_points, 3))
     sequence1 = np.random.choice(categories[:3], size=n_of_points)
 
     fig, ax = plt.subplots()
     x_delta = 0.01
     x_values = np.arange(0, 5, x_delta)
-    y_values = np.array(lchd.test_integrator(x_values))
+    y_values = np.array(weight_function.integral_vec(x_values))
     y_prime_values = (y_values[1:] - y_values[:-1]) / x_delta
     ax.plot(x_values, y_values)
     ax.plot(x_values[1:], y_prime_values)
@@ -28,7 +28,7 @@ def main():
     fig, ax = plt.subplots()
     for idx, delta in enumerate(deltas):
 
-        directions = np.random.normal(0, 1, size=(n_of_points, n_of_dims))
+        directions = np.random.normal(0, 1, size=(n_of_points, 3))
         normals = np.sqrt(np.sum(directions ** 2, axis=1, keepdims=True))
         directions = points + delta * directions / normals
         sequence2 = np.random.choice(categories[3:], size=n_of_points)

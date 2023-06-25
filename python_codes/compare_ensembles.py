@@ -14,10 +14,9 @@ from time import time
 from Bio.PDB.PDBParser import PDBParser
 from Bio.PDB.Residue import Residue
 from Bio.PDB.Atom import Atom
-from Bio.PDB.PDBIO import PDBIO, Select
+from Bio.PDB.PDBIO import Select
 
-from loco_hd import LoCoHD, WeightFunction
-from atom_converter_utils import PrimitiveAssigner, PrimitiveAtomTemplate
+from loco_hd import LoCoHD, WeightFunction, PrimitiveAssigner, PrimitiveAtomTemplate
 
 ATOM_ID = Tuple[int, str]
 

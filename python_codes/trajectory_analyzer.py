@@ -17,8 +17,7 @@ from MDAnalysis.coordinates.base import Timestep
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 
-from loco_hd import LoCoHD, PrimitiveAtom, WeightFunction
-from atom_converter_utils import PrimitiveAssigner, PrimitiveAtomTemplate, PrimitiveAtomSource
+from loco_hd import LoCoHD, PrimitiveAtom, WeightFunction, PrimitiveAssigner, PrimitiveAtomTemplate, PrimitiveAtomSource
 
 warnings.filterwarnings("ignore")
 
