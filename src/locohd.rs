@@ -2,6 +2,7 @@ use pyo3::prelude::*;
 use pyo3::exceptions::PyValueError;
 
 use rayon::prelude::*;
+use rayon::{ThreadPool, ThreadPoolBuilder};
 use rayon::iter::ParallelIterator;
 
 use kd_tree::KdTree;
@@ -30,15 +31,29 @@ pub struct LoCoHD {
     #[pyo3(get, set)]
     categories: Vec<String>,
 
-    w_func: WeightFunction
+    w_func: WeightFunction,
+    thread_pool: ThreadPool
 }
 
 #[pymethods]
 impl LoCoHD {
 
     #[new]
-    pub fn new(categories: Vec<String>, w_func: WeightFunction) -> Self {
-        Self { categories, w_func }
+    pub fn build(categories: Vec<String>, w_func: WeightFunction, n_of_threads: Option<usize>) -> PyResult<Self> {
+
+        let n_of_threads = match n_of_threads {
+            Some(n) => n,
+            None => 0
+        };
+        let thread_pool = ThreadPoolBuilder::new()
+            .num_threads(n_of_threads)
+            .build()
+            .or_else(|err| {
+                let err_msg = format!("Error while building the thread pool!\nDebug: {:?}", err);
+                return Err(PyValueError::new_err(err_msg));
+            })?;
+
+        Ok(Self { categories, w_func, thread_pool })
     }
 
     /// Calculates the hellinger integral between two environments belonging to two anchor points.
@@ -198,7 +213,7 @@ impl LoCoHD {
             return Err(PyValueError::new_err(err_msg));
         }
 
-        let (output_ok, output_err): (Vec<_>, Vec<_>) = dmx_a
+        let run_calculation = || dmx_a
             .par_iter()
             .zip(&dmx_b)
             .map(|(row_a, row_b)| {
@@ -206,7 +221,9 @@ impl LoCoHD {
                 let (current_dists_b, current_seq_b) = utils::sort_together(row_b, &seq_b);
                 self.from_anchors(current_seq_a, current_seq_b, current_dists_a, current_dists_b)
             })
-            .partition(Result::is_ok);
+            .partition::<Vec<_>, Vec<_>, _>(Result::is_ok);
+
+        let (output_ok, output_err) = self.thread_pool.install(run_calculation);
 
         if output_err.len() > 0 {
             let err_msg = "The from_anchors function returned an error during the LoCoHD calculations!".to_owned();
@@ -255,64 +272,56 @@ impl LoCoHD {
             prim_b.iter().collect::<Vec<_>>()
         );
 
-        // Calculate the environment LoCoHD scores paralelly for each anchor pair.
-        let (output_ok, output_err): (Vec<_>, Vec<_>) = anchor_pairs
+        // Define the closure that calculates the co-sorted environmental primitive types and
+        // distances measured from an anchor atom.
+        let env_from_idx = |
+            prim_seq: &Vec<PrimitiveAtom>, 
+            anchor_idx: usize, 
+            kdtree: &KdTree<&PrimitiveAtom>
+        | {
+
+            // Search for the neighbour (environment) atoms of the anchor atom.
+            let neighbours = kdtree.within_radius(&prim_seq[anchor_idx].coordinates, threshold_distance);
+
+            // Filter out homo residue contacts if necessary (based on the tag field).
+            let neighbours = neighbours.into_iter().filter(|&p| 
+                p.tag != prim_seq[anchor_idx].tag || !only_hetero_contacts
+            );
+
+            // Initialize the primitive type sequence and distances for the environment.
+            let mut env_seq = vec![];
+            let mut env_dists = vec![];
+
+            // If only_hetero_contacts is true, then we have to put back the anchor atom
+            // into the environment, since we have just filtered it out.
+            if only_hetero_contacts {
+                env_seq.push(prim_seq[anchor_idx].primitive_type.clone());
+                env_dists.push(0.);
+            }
+
+            // Collect the primitive type sequence and distances for the environment.
+            for env_neighbour in neighbours {
+                env_seq.push(env_neighbour.primitive_type.clone());
+                env_dists.push(utils::euclidean_distance(prim_seq[anchor_idx].coordinates, env_neighbour.coordinates));
+            }
+
+            // Sort the distances and sequence together.
+            utils::sort_together(&env_dists, &env_seq)
+        };
+
+        // This closure will calculate the environment LoCoHD scores paralelly for each anchor pair.
+        let run_calculation = || anchor_pairs
             .par_iter()
             .map(|&(idx1, idx2)| {
 
-                // Search for the neighbour (environment) atoms of the anchor atom in the first structure.
-                // Also, filter out homo residue contacts if necessary (based on the tag field).
-                let neighbours_a = kdtree_a.within_radius(&prim_a[idx1].coordinates, threshold_distance);
-                let neighbours_a = neighbours_a.into_iter().filter(|&p| 
-                    p.tag != prim_a[idx1].tag || !only_hetero_contacts
-                );
-
-                // Initialize the primitive type sequence and distances for the first environment.
-                let mut env_a_seq = vec![];
-                let mut env_a_dists = vec![];
-
-                // If only_hetero_contacts is true, then we have to put back the anchor atom
-                // into the environment, since we have just filtered it out.
-                if only_hetero_contacts {
-                    env_a_seq.push(prim_a[idx1].primitive_type.clone());
-                    env_a_dists.push(0f64);
-                }
-
-                // Collect the primitive type sequence and distances for the first environment.
-                for env_a_neighbour in neighbours_a {
-                    env_a_seq.push(env_a_neighbour.primitive_type.clone());
-                    env_a_dists.push(utils::euclidean_distance(prim_a[idx1].coordinates, env_a_neighbour.coordinates));
-                }
-
-                // Sort the distances and sequence together.
-                let (env_a_dists, env_a_seq) = utils::sort_together(&env_a_dists, &env_a_seq);
-
-                // Do the same thing with the second environment.
-
-                let neighbours_b = kdtree_b.within_radius(&prim_b[idx2].coordinates, threshold_distance);
-                let neighbours_b = neighbours_b.into_iter().filter(|&p| 
-                    p.tag != prim_b[idx2].tag || !only_hetero_contacts
-                );
-
-                let mut env_b_seq = vec![];
-                let mut env_b_dists = vec![];
-
-                if only_hetero_contacts {
-                    env_b_seq.push(prim_b[idx2].primitive_type.clone());
-                    env_b_dists.push(0f64);
-                }
-
-                for env_b_neighbour in neighbours_b {
-                    env_b_seq.push(env_b_neighbour.primitive_type.clone());
-                    env_b_dists.push(utils::euclidean_distance(prim_b[idx2].coordinates, env_b_neighbour.coordinates));
-                }
-
-                let (env_b_dists, env_b_seq) = utils::sort_together(&env_b_dists, &env_b_seq);
-                
-                // Return the LoCoHD score.
+                let (env_a_dists, env_a_seq) = env_from_idx(&prim_a, idx1, &kdtree_a);
+                let (env_b_dists, env_b_seq) = env_from_idx(&prim_b, idx2, &kdtree_b);
                 self.from_anchors(env_a_seq, env_b_seq, env_a_dists, env_b_dists)
-        })
-        .partition(Result::is_ok);
+            })
+            .partition::<Vec<_>, Vec<_>, _>(Result::is_ok);
+
+        // Run the closure installed to the thread pool.
+        let (output_ok, output_err) = self.thread_pool.install(run_calculation);
 
         if output_err.len() > 0 {
             let err_msg = "The from_anchors function returned an error during the LoCoHD calculations!".to_owned();

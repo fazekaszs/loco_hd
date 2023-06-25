@@ -12,7 +12,7 @@ fn value_test1() -> PyResult<()> {
         vec![0., 4.]
     )?;
     let cats = vec!["O".to_owned(), "A".to_owned(), "B".to_owned(), "C".to_owned()];
-    let lchd = LoCoHD::new(cats, w_func);
+    let lchd = LoCoHD::build(cats, w_func, None)?;
 
     let result = lchd.from_anchors(
         vec!["O".to_owned(), "A".to_owned(), "B".to_owned(), "C".to_owned()], 

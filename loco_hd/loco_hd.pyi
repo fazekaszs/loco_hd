@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 class WeightFunction:
     """
@@ -79,16 +79,21 @@ class LoCoHD:
 
     :param categories: The primitive types to be used.
     :param w_func: The ``WeightFunction`` to be used.
+    :param n_of_threads: The number of threads to use during a calculation.
     """
 
     categories: List[str]
 
-    def __init__(self, categories: List[str], w_func: WeightFunction) -> None:
+    def __init__(self, 
+                categories: List[str], 
+                w_func: WeightFunction, 
+                n_of_threads: Optional[int] = None) -> None:
         """
         The constructor of the ``LoCoHD`` class.
 
         :param categories:
         :param w_func:
+        :param n_of_threads:
         """
 
     def from_anchors(self, seq_a: List[str], seq_b: List[str], dists_a: List[float], dists_b: List[float]) -> float:
