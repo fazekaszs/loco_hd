@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use pyo3::prelude::*;
 use pyo3::exceptions::PyValueError;
 
@@ -28,9 +30,7 @@ mod utils;
 #[pyclass]
 pub struct LoCoHD {
 
-    #[pyo3(get, set)]
-    categories: Vec<String>,
-
+    categories: HashMap<String, usize>,
     w_func: WeightFunction,
     thread_pool: ThreadPool
 }
@@ -41,6 +41,14 @@ impl LoCoHD {
     #[new]
     pub fn build(categories: Vec<String>, w_func: WeightFunction, n_of_threads: Option<usize>) -> PyResult<Self> {
 
+        // For faster lookup of the categories we use a HashMap instead of the supplied Vec.
+        let categories: HashMap<_, _> = categories
+            .into_iter()
+            .enumerate()
+            .map(|(a, b)| (b, a))
+            .collect();
+
+        // Set multithreading options
         let n_of_threads = match n_of_threads {
             Some(n) => n,
             None => 0

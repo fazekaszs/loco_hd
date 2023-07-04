@@ -9,7 +9,11 @@ fn approx_eq(test_value: f64, goal_value: f64) {
 #[test]
 fn hdist_values() -> PyResult<()> {
 
-    let cats = vec!["A".to_owned(), "B".to_owned(), "C".to_owned()];
+    let cats = vec!["A".to_owned(), "B".to_owned(), "C".to_owned()]
+        .into_iter()
+        .enumerate()
+        .map(|(a, b)| (b, a))
+        .collect();
     let mut pmf_system = PMFSystem::new(&cats);
 
     pmf_system.update_pmf1(&"A".to_owned())?;
@@ -36,7 +40,11 @@ fn hdist_values() -> PyResult<()> {
 #[test]
 fn evaluate_pmf_system_err() {
 
-    let cats = vec!["A".to_owned(), "B".to_owned(), "C".to_owned()];
+    let cats = vec!["A".to_owned(), "B".to_owned(), "C".to_owned()]
+        .into_iter()
+        .enumerate()
+        .map(|(a, b)| (b, a))
+        .collect();
     let mut pmf_system = PMFSystem::new(&cats);
 
     assert!(pmf_system.hellinger_dist().is_err());

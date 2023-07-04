@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use pyo3::{prelude::*, exceptions::PyValueError};
 
 /// The Probability Mass Function System is used to capture the
@@ -7,14 +8,14 @@ use pyo3::{prelude::*, exceptions::PyValueError};
 /// functions, and calculation of the Hellinger-distance between the
 /// two stored PMFs.
 pub struct PMFSystem<'a> {
-    categories: &'a Vec<String>,
+    categories: &'a HashMap<String, usize>,
     pmf1: Vec<usize>,
     pmf2: Vec<usize>
 }
 
 impl<'a> PMFSystem<'a> {
 
-    pub fn new(categories: &Vec<String>) -> PMFSystem {
+    pub fn new(categories: &HashMap<String, usize>) -> PMFSystem {
         PMFSystem {
             categories,
             pmf1: vec![0; categories.len()],
@@ -24,9 +25,9 @@ impl<'a> PMFSystem<'a> {
 
     fn find_category_idx(&self, category: &String) -> PyResult<usize> {
 
-        let category_idx = self.categories.iter().position(|x| *x == *category);
+        let category_idx = self.categories.get(category);
 
-        let category_idx = if let Some(idx) = category_idx { idx }
+        let category_idx = if let Some(&idx) = category_idx { idx }
         else { 
             let err_msg = format!("Category (with name {}) not found!", category);
             return Err(PyValueError::new_err(err_msg)); 
