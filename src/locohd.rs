@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{ptr, collections::HashMap};
 
 use pyo3::prelude::*;
 use pyo3::exceptions::PyValueError;
@@ -13,6 +13,11 @@ use kd_tree::KdTree;
 mod weight_function_utests;
 mod weight_function;
 pub use weight_function::WeightFunction;
+
+#[cfg(test)]
+mod tag_pairing_rule_utests;
+mod tag_pairing_rule;
+pub use tag_pairing_rule::TagPairingRule;
 
 #[cfg(test)]
 mod pmf_utests;
@@ -32,6 +37,7 @@ pub struct LoCoHD {
 
     categories: HashMap<String, usize>,
     w_func: WeightFunction,
+    tag_pairing_rule: TagPairingRule,
     thread_pool: ThreadPool
 }
 
@@ -39,7 +45,12 @@ pub struct LoCoHD {
 impl LoCoHD {
 
     #[new]
-    pub fn build(categories: Vec<String>, w_func: WeightFunction, n_of_threads: Option<usize>) -> PyResult<Self> {
+    pub fn build(
+        categories: Vec<String>, 
+        w_func: WeightFunction, 
+        tag_pairing_rule: TagPairingRule,
+        n_of_threads: Option<usize>
+    ) -> PyResult<Self> {
 
         // For faster lookup of the categories we use a HashMap instead of the supplied Vec.
         let categories: HashMap<_, _> = categories
@@ -61,7 +72,7 @@ impl LoCoHD {
                 return Err(PyValueError::new_err(err_msg));
             })?;
 
-        Ok(Self { categories, w_func, thread_pool })
+        Ok(Self { categories, w_func, tag_pairing_rule, thread_pool })
     }
 
     /// Calculates the hellinger integral between two environments belonging to two anchor points.
@@ -265,7 +276,6 @@ impl LoCoHD {
         prim_a: Vec<PrimitiveAtom>, 
         prim_b: Vec<PrimitiveAtom>, 
         anchor_pairs: Vec<(usize, usize)>, 
-        only_hetero_contacts: bool,
         threshold_distance: f64) -> PyResult<Vec<f64>>
     {
 
@@ -291,21 +301,16 @@ impl LoCoHD {
             // Search for the neighbour (environment) atoms of the anchor atom.
             let neighbours = kdtree.within_radius(&prim_seq[anchor_idx].coordinates, threshold_distance);
 
-            // Filter out homo residue contacts if necessary (based on the tag field).
-            let neighbours = neighbours.into_iter().filter(|&p| 
-                p.tag != prim_seq[anchor_idx].tag || !only_hetero_contacts
-            );
+            // Filter out unwanted contacts based on the tag field and using the tag_pairing_rule field.
+            let neighbours = neighbours.into_iter().filter(|&&p| {
+                let mut accepted = ptr::eq(p, &prim_seq[anchor_idx]);
+                accepted |= self.tag_pairing_rule.pair_accepted(&(p.tag.clone(), prim_seq[anchor_idx].tag.clone()));
+                accepted
+            });
 
             // Initialize the primitive type sequence and distances for the environment.
             let mut env_seq = vec![];
             let mut env_dists = vec![];
-
-            // If only_hetero_contacts is true, then we have to put back the anchor atom
-            // into the environment, since we have just filtered it out.
-            if only_hetero_contacts {
-                env_seq.push(prim_seq[anchor_idx].primitive_type.clone());
-                env_dists.push(0.);
-            }
 
             // Collect the primitive type sequence and distances for the environment.
             for env_neighbour in neighbours {

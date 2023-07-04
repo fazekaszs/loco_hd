@@ -1,4 +1,5 @@
 use super::*;
+use super::tag_pairing_rule::TagPairingRuleVariants;
 
 fn approx_eq(test_value: f64, goal_value: f64) {
     assert!(goal_value - 1E-4 < test_value && test_value < goal_value + 1E-4);
@@ -12,7 +13,10 @@ fn value_test1() -> PyResult<()> {
         vec![0., 4.]
     )?;
     let cats = vec!["O".to_owned(), "A".to_owned(), "B".to_owned(), "C".to_owned()];
-    let lchd = LoCoHD::build(cats, w_func, None)?;
+    let tag_pairing_rule = TagPairingRule::build(
+        TagPairingRuleVariants::WithoutList { accept_same: false }
+    )?;
+    let lchd = LoCoHD::build(cats, w_func, tag_pairing_rule, None)?;
 
     let result = lchd.from_anchors(
         vec!["O".to_owned(), "A".to_owned(), "B".to_owned(), "C".to_owned()], 
