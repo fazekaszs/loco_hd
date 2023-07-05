@@ -2,22 +2,26 @@ use std::collections::HashSet;
 
 use pyo3::prelude::*;
 
-#[derive(FromPyObject, Clone)]
+#[derive(FromPyObject, Clone, Debug)]
 pub enum TagPairingRuleVariants {
 
     WithoutList { 
+        #[pyo3(item)]
         accept_same: bool
     },
 
     WithList {
+        #[pyo3(item)]
         tag_pairs: HashSet<(String, String)>,
+        #[pyo3(item)]
         accepted_pairs: bool,
+        #[pyo3(item)]
         ordered: bool
     },
 }
 
 #[pyclass]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TagPairingRule {
     variant: TagPairingRuleVariants
 }
@@ -28,6 +32,15 @@ impl TagPairingRule {
     #[new]
     pub fn build(variant: TagPairingRuleVariants) -> PyResult<Self> {
         Ok(Self { variant })
+    }
+
+    #[pyo3(name="pair_accepted")]
+    pub fn pair_accepted_py(&self, pair: (String, String)) -> bool {
+        self.pair_accepted(&pair)
+    }
+
+    pub fn get_dbg_str(&self) -> String {
+        format!("{:#?}", self)
     }
 }
 
@@ -40,9 +53,11 @@ impl TagPairingRule {
             TagPairingRuleVariants::WithoutList { 
                 accept_same 
             } => {
+
                 let mut accepted = pair.0 == pair.1;
                 if !accept_same { accepted = !accepted }
                 accepted
+
             },
 
             TagPairingRuleVariants::WithList { 
@@ -58,6 +73,5 @@ impl TagPairingRule {
 
             },
         }
-
     }    
 }

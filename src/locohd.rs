@@ -17,7 +17,7 @@ pub use weight_function::WeightFunction;
 #[cfg(test)]
 mod tag_pairing_rule_utests;
 mod tag_pairing_rule;
-pub use tag_pairing_rule::TagPairingRule;
+pub use tag_pairing_rule::{TagPairingRule, TagPairingRuleVariants};
 
 #[cfg(test)]
 mod pmf_utests;
@@ -35,8 +35,11 @@ mod utils;
 #[pyclass]
 pub struct LoCoHD {
 
+    #[pyo3(get)]
     categories: HashMap<String, usize>,
+    #[pyo3(get)]
     w_func: WeightFunction,
+    #[pyo3(get)]
     tag_pairing_rule: TagPairingRule,
     thread_pool: ThreadPool
 }
@@ -48,7 +51,7 @@ impl LoCoHD {
     pub fn build(
         categories: Vec<String>, 
         w_func: WeightFunction, 
-        tag_pairing_rule: TagPairingRule,
+        tag_pairing_rule: Option<TagPairingRule>,
         n_of_threads: Option<usize>
     ) -> PyResult<Self> {
 
@@ -58,6 +61,12 @@ impl LoCoHD {
             .enumerate()
             .map(|(a, b)| (b, a))
             .collect();
+
+        // Set default TagPairingRule options if necessary
+        let tag_pairing_rule = match tag_pairing_rule {
+            None => TagPairingRule::build(TagPairingRuleVariants::WithoutList { accept_same: true })?,
+            Some(v) => v
+        };
 
         // Set multithreading options
         let n_of_threads = match n_of_threads {
@@ -207,7 +216,7 @@ impl LoCoHD {
             let delta_w = self.w_func.integral_range(dists_a[dists_a.len() - 1], f64::INFINITY)?;
             h_integral += delta_w * current_hdist;
 
-        } else { unimplemented!(); }
+        } else { unreachable!(); }
 
         Ok(h_integral)
     }
@@ -304,7 +313,7 @@ impl LoCoHD {
             // Filter out unwanted contacts based on the tag field and using the tag_pairing_rule field.
             let neighbours = neighbours.into_iter().filter(|&&p| {
                 let mut accepted = ptr::eq(p, &prim_seq[anchor_idx]);
-                accepted |= self.tag_pairing_rule.pair_accepted(&(p.tag.clone(), prim_seq[anchor_idx].tag.clone()));
+                accepted |= self.tag_pairing_rule.pair_accepted(&(prim_seq[anchor_idx].tag.clone(), p.tag.clone()));
                 accepted
             });
 

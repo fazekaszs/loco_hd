@@ -15,7 +15,7 @@ from scipy import stats
 from Bio.PDB.PDBParser import PDBParser
 from Bio.PDB.Model import Model
 
-from loco_hd import LoCoHD, PrimitiveAtom, WeightFunction, PrimitiveAssigner, PrimitiveAtomTemplate
+from loco_hd import LoCoHD, PrimitiveAtom, WeightFunction, PrimitiveAssigner, PrimitiveAtomTemplate, TagPairingRule
 
 
 def is_anchor_atom(pra_template: PrimitiveAtomTemplate) -> bool:
@@ -53,7 +53,7 @@ def main():
     random_seed = 1994
     max_n_of_anchors = 1500
     weight_function = ("uniform", [3, 10, ])
-    only_hetero_contacts = True
+    tag_pairing_rule = TagPairingRule({"accept_same": False})
     upper_cutoff = 10
 
     # Create working directory
@@ -68,7 +68,7 @@ def main():
         json.dump({
             "assigner_config_path": str(assigner_config_path), "pisces_path": str(pisces_path),
             "random_seed": random_seed, "weight_function": weight_function,
-            "only_hetero_contacts": only_hetero_contacts, "upper_cutoff": upper_cutoff
+            "tag_pairing_rule": tag_pairing_rule.get_dbg_str(), "upper_cutoff": upper_cutoff
         }, f)
 
     # Save the assigner config to the working directory
@@ -77,7 +77,7 @@ def main():
     # Initialize the assigner and locohd
     primitive_assigner = PrimitiveAssigner(assigner_config_path)
     weight_function = WeightFunction(*weight_function)
-    lchd = LoCoHD(primitive_assigner.all_primitive_types, weight_function)
+    lchd = LoCoHD(primitive_assigner.all_primitive_types, weight_function, tag_pairing_rule)
 
     # Collect the PDB file names
     pdb_files: List[str] = os.listdir(pisces_path)
@@ -120,8 +120,7 @@ def main():
         print(f"Number of anchors: {len(anchor_pairs)} - ", end="")
 
         # Start LoCoHD calculations.
-        lchd_scores = lchd.from_primitives(primitive_atoms1, primitive_atoms2,
-                                           anchor_pairs, only_hetero_contacts, upper_cutoff)
+        lchd_scores = lchd.from_primitives(primitive_atoms1, primitive_atoms2, anchor_pairs, upper_cutoff)
 
         print(f"Calculation #{pdb_idx + 1} OK! Avg. LoCoHD: {np.mean(lchd_scores):.2%}")
 

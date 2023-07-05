@@ -17,7 +17,8 @@ from MDAnalysis.coordinates.base import Timestep
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 
-from loco_hd import LoCoHD, PrimitiveAtom, WeightFunction, PrimitiveAssigner, PrimitiveAtomTemplate, PrimitiveAtomSource
+from loco_hd import LoCoHD, PrimitiveAtom, WeightFunction, PrimitiveAssigner, PrimitiveAtomTemplate, \
+    PrimitiveAtomSource, TagPairingRule
 
 warnings.filterwarnings("ignore")
 
@@ -88,7 +89,8 @@ def calculate_lchd_scores(universe: Universe,
 
     # Define the LoCoHD instance
     w_func = WeightFunction("uniform", [3, 10])
-    lchd = LoCoHD(primitive_assigner.all_primitive_types, w_func)
+    tag_pairing_rule = TagPairingRule({"accept_same": False})
+    lchd = LoCoHD(primitive_assigner.all_primitive_types, w_func, tag_pairing_rule)
 
     # Get the primitive atoms for the first frame and also define the anchor atoms
     pra_templates_start = primitive_assigner.assign_from_universe(universe.trajectory[0], universe)
@@ -108,7 +110,7 @@ def calculate_lchd_scores(universe: Universe,
         prim_atoms = list(map(prat_to_pra, pra_templates))
 
         # Calculate the LoCoHD scores
-        lchd_scores = lchd.from_primitives(prim_atoms_start, prim_atoms, anchors, True, 10)
+        lchd_scores = lchd.from_primitives(prim_atoms_start, prim_atoms, anchors, 10)
         all_points.append(lchd_scores)
 
         # Print out time statistics

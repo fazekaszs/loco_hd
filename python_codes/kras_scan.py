@@ -8,7 +8,7 @@ from Bio.PDB import Chain
 from Bio.PDB.PDBParser import PDBParser
 from Bio.PDB.Atom import Atom
 
-from loco_hd import LoCoHD, PrimitiveAtom, PrimitiveAssigner, PrimitiveAtomTemplate, WeightFunction
+from loco_hd import LoCoHD, PrimitiveAtom, PrimitiveAssigner, PrimitiveAtomTemplate, WeightFunction, TagPairingRule
 
 
 def prat_to_pra(prat: PrimitiveAtomTemplate) -> PrimitiveAtom:
@@ -47,8 +47,9 @@ def main():
     anchor_idxs = [(0, idx) for idx in range(len(scan_anchors))]
 
     weight_function = WeightFunction("uniform", [3, 10])
-    lchd = LoCoHD(pra_assigner.all_primitive_types + ["dummy"], weight_function)
-    lchd_scores = lchd.from_primitives(ref_anchor + pra_list, scan_anchors + pra_list, anchor_idxs, True, 10.)
+    tag_pairing_rule = TagPairingRule({"accept_same": False})
+    lchd = LoCoHD(pra_assigner.all_primitive_types + ["dummy"], weight_function, tag_pairing_rule)
+    lchd_scores = lchd.from_primitives(ref_anchor + pra_list, scan_anchors + pra_list, anchor_idxs, 10.)
     lchd_scores = beta.cdf(lchd_scores, 10.52, 33.48)
 
     out = ""

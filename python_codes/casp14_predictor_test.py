@@ -13,7 +13,7 @@ from typing import List, Dict, Tuple
 from matplotlib.patches import Rectangle
 from scipy.stats import spearmanr
 
-from loco_hd import LoCoHD, PrimitiveAtom, WeightFunction, PrimitiveAssigner, PrimitiveAtomTemplate
+from loco_hd import LoCoHD, PrimitiveAtom, WeightFunction, PrimitiveAssigner, PrimitiveAtomTemplate, TagPairingRule
 
 
 # Set the necessary paths. The available predictor keys are the following:
@@ -190,7 +190,8 @@ def main():
 
     # Create the LoCoHD instance.
     w_func = WeightFunction("uniform", [3, 10])
-    lchd = LoCoHD(primitive_assigner.all_primitive_types, w_func)
+    tag_pairing_rule = TagPairingRule({"accept_same": False})
+    lchd = LoCoHD(primitive_assigner.all_primitive_types, w_func, tag_pairing_rule)
 
     # The values in the structures dict are also dicts. The first key refers to the
     # structure name (like T1024), while the second key is either "true" (referring to the true structure)
@@ -239,8 +240,8 @@ def main():
             pred_pra_templates = primitive_assigner.assign_primitive_structure(structure)
             pred_prim_atoms = list(map(prat_to_pra, pred_pra_templates))
 
-            # Calculate LoCoHD score (only_hetero_contacts = True, distance_cutoff = 10).
-            lchd_scores = lchd.from_primitives(true_prim_atoms, pred_prim_atoms, anchors, True, 10)
+            # Calculate LoCoHD score with distance_cutoff = 10.
+            lchd_scores = lchd.from_primitives(true_prim_atoms, pred_prim_atoms, anchors, 10)
 
             # Collecting the lDDT scores.
             lddt_scores = list()

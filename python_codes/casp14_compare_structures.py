@@ -7,7 +7,7 @@ from Bio.PDB.PDBParser import PDBParser
 from Bio.PDB.Atom import Atom
 from Bio.PDB.PDBIO import PDBIO
 from pathlib import Path
-from loco_hd import LoCoHD, PrimitiveAtom, PrimitiveAssigner, PrimitiveAtomTemplate, WeightFunction
+from loco_hd import LoCoHD, PrimitiveAtom, PrimitiveAssigner, PrimitiveAtomTemplate, WeightFunction, TagPairingRule
 from casp14_predictor_extractor import filter_atoms
 
 # Examined structures:
@@ -124,7 +124,8 @@ def main():
 
     # Initialize LoCoHD instance
     weight_function = WeightFunction("uniform", [3, 10])
-    lchd = LoCoHD(primitive_assigner.all_primitive_types, weight_function)
+    tag_pairing_rule = TagPairingRule({"accept_same": False})
+    lchd = LoCoHD(primitive_assigner.all_primitive_types, weight_function, tag_pairing_rule)
 
     # Parse the structures
     pra_templates_true = primitive_assigner.assign_primitive_structure(protein_true)
@@ -144,9 +145,9 @@ def main():
     pra_pred2 = list(map(prat_to_pra, pra_templates_pred2))
 
     # Calculate the LoCoHD values
-    lchd_values1 = lchd.from_primitives(pra_true, pra_pred1, anchor_idxs, True, 10.)
+    lchd_values1 = lchd.from_primitives(pra_true, pra_pred1, anchor_idxs, 10.)
     lchd_values1 = np.array(lchd_values1)
-    lchd_values2 = lchd.from_primitives(pra_true, pra_pred2, anchor_idxs, True, 10.)
+    lchd_values2 = lchd.from_primitives(pra_true, pra_pred2, anchor_idxs, 10.)
     lchd_values2 = np.array(lchd_values2)
 
     lchd_mean1 = np.mean(lchd_values1)
