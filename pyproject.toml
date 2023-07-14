@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "loco_hd"
-version = "0.1.0"
+version = "0.1.2dev"
 authors = [
     { name = "Zsolt Fazekas", email = "zsolt.fazekas.9@gmail.com" }
 ]
@@ -16,6 +16,6 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
-    "biopython>1.81",
+    "biopython>=1.80",
     "numpy>=1.21.6"
 ]
