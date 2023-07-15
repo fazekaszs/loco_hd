@@ -133,7 +133,7 @@ class LoCoHD:
 
     def __init__(self, 
                 categories: List[str], 
-                w_func: WeightFunction, 
+                w_func: Optional[WeightFunction] = None, 
                 tag_pairing_rule: Optional[TagPairingRule] = None,
                 n_of_threads: Optional[int] = None) -> None:
         """
@@ -141,9 +141,10 @@ class LoCoHD:
 
         :param categories: The full set of the primitive types that can occur during calculations. When a primitive
           type that is not part of this list is encountered, the software throws an error.
-        :param w_func: The weight function used inside the integral. It weights the cumulative contribution of the
-          different primitive atoms within certain distances from the anchor atom, i.e. the contribution of primitive
-          atoms within the anchor atom's environment.
+        :param w_func: Either ``None`` or a  ``WeightFunction`` instance. The weight function used inside the integral. 
+          It weights the cumulative contribution of the different primitive atoms within certain distances from 
+          the anchor atom, i.e. the contribution of primitive atoms within the anchor atom's environment.
+          When ``None``, it defaults to the ``WeightFunction("uniform", [3., 10.])`` case.
         :param tag_pairing_rule: Either ``None`` or a  ``TagPairingRule`` instance. See the description of the 
           ``TagPairingRule`` class for what it does. When ``None``, it defaults to the
           ``TagPairingRule({"accept_same": True})`` case.

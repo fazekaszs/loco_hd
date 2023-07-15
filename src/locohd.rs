@@ -50,7 +50,7 @@ impl LoCoHD {
     #[new]
     pub fn build(
         categories: Vec<String>, 
-        w_func: WeightFunction, 
+        w_func: Option<WeightFunction>, 
         tag_pairing_rule: Option<TagPairingRule>,
         n_of_threads: Option<usize>
     ) -> PyResult<Self> {
@@ -61,6 +61,12 @@ impl LoCoHD {
             .enumerate()
             .map(|(a, b)| (b, a))
             .collect();
+
+        // Set default WeightFunction if necessary
+        let w_func = match w_func {
+            None => WeightFunction::build("uniform".to_owned(), vec![3., 10.])?,
+            Some(v) => v
+        };
 
         // Set default TagPairingRule options if necessary
         let tag_pairing_rule = match tag_pairing_rule {
