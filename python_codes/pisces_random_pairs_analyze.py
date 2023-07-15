@@ -274,13 +274,13 @@ def fit_beta_to_samples(lchd_values: List[float]):
 
 def main():
 
-    workdir = Path("workdir/pisces")
+    data_source_dir = Path("../workdir/pisces")
     # data_source = "run_2023-01-10-11-52-33"
-    data_source = "run_2023-02-08-12-50-23"
+    data_source_name = "run_2023-02-08-12-50-23"
 
-    print(f"Opening directory: \"{data_source}\" at \"{workdir}\"")
+    print(f"Opening directory: \"{data_source_name}\" at \"{data_source_dir}\"")
 
-    with open(workdir / data_source / "locohd_data.pisces", "rb") as f:
+    with open(data_source_dir / data_source_name / "locohd_data.pisces", "rb") as f:
         data: List[Tuple[str, str, float]] = pickle.load(f)
 
     print(f"Number of samples: {len(data)}. Starting to generate statistics...")
@@ -294,7 +294,7 @@ def main():
     # Saving the statistics.
 
     print("tsvs created! Saving tsv tables...")
-    analysis_dir_path = workdir / data_source / "analysis"
+    analysis_dir_path = data_source_dir / data_source_name / "analysis"
     if not os.path.exists(analysis_dir_path):
         os.mkdir(analysis_dir_path)
 

@@ -21,7 +21,7 @@ def prat_to_pra(prat: PrimitiveAtomTemplate) -> PrimitiveAtom:
 
 def main():
 
-    protein: Chain = PDBParser(QUIET=True).get_structure("kras", "./workdir/kras_scan/4obe.pdb")[0]["A"]
+    protein: Chain = PDBParser(QUIET=True).get_structure("kras", "../data_sources/kras_scan/4obe.pdb")[0]["A"]
     pra_assigner = PrimitiveAssigner(Path("../primitive_typings/all_atom.config.json"))
 
     prat_list = pra_assigner.assign_primitive_structure(protein)
@@ -73,7 +73,7 @@ def main():
 
         out += line
 
-    with open("./workdir/kras_scan/4obe_scan.pdb", "w") as f:
+    with open("../workdir/kras_scan/4obe_scan.pdb", "w") as f:
         f.write(out)
 
 

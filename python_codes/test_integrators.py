@@ -35,7 +35,7 @@ def main():
         num_params_str = "p".join(map(lambda x: f"{x:.3f}", param_set[1]))
         test_name = f"{param_set[0]}_p{num_params_str}.png"
 
-        fig.savefig(f"./workdir/integrator_tests/{test_name}", dpi=300)
+        fig.savefig(f"../workdir/integrator_tests/{test_name}", dpi=300)
 
 
 if __name__ == "__main__":

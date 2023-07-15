@@ -78,9 +78,11 @@ def arg_median(data: np.ndarray):
     return np.argsort(data)[len(data) // 2]
 
 
-def calculate_lchd_scores(universe: Universe,
-                          delta_frame: int,
-                          primitive_typing_scheme_path: Path) -> np.ndarray:
+def calculate_lchd_scores(
+        universe: Universe,
+        delta_frame: int,
+        primitive_typing_scheme_path: Path
+) -> np.ndarray:
 
     print("Calculating the time-dependency of residue LoCoHD scores!")
 
@@ -123,7 +125,7 @@ def calculate_lchd_scores(universe: Universe,
     return np.array(all_points)
 
 
-def calculate_bimodality_coeff(universe: Universe, all_points: np.ndarray, workdir: Path):
+def calculate_bimodality_coeff(universe: Universe, all_points: np.ndarray, target_dir: Path):
 
     print("Calculating bimodalities!")
 
@@ -141,15 +143,17 @@ def calculate_bimodality_coeff(universe: Universe, all_points: np.ndarray, workd
         out += f"{resname}\t{coeff}\n"
     out = out[:-1]
 
-    with open(workdir / "resi_bimodalities.txt", "w") as f:
+    with open(target_dir / "resi_bimodalities.txt", "w") as f:
         f.write(out)
 
 
-def plot_time_dependencies(universe: Universe,
-                           x_values: np.ndarray,
-                           all_points: np.ndarray,
-                           delta_frame: int,
-                           workdir: Path):
+def plot_time_dependencies(
+        universe: Universe,
+        x_values: np.ndarray,
+        all_points: np.ndarray,
+        delta_frame: int,
+        target_dir: Path
+):
 
     print("Plotting LoCoHD score time dependencies!")
 
@@ -200,7 +204,7 @@ def plot_time_dependencies(universe: Universe,
         ax.set_title(plot_title)
         ax.set_yticks(y_axis_ticks, labels=[f"{tick:.1%}" for tick in y_axis_ticks])
         ax.set_ylim(0, max_lchd)
-        fig.savefig(str(workdir / f"{plot_title}.png"), dpi=200, bbox_inches="tight")
+        fig.savefig(str(target_dir / f"{plot_title}.png"), dpi=200, bbox_inches="tight")
 
     # Plotting of the mean (along residues) LoCoHD value's time dependency
     mean_lchd_t = np.mean(all_points, axis=1)
@@ -237,12 +241,12 @@ def plot_time_dependencies(universe: Universe,
     ax.set_title("Mean LoCoHD values")
     ax.set_yticks(y_axis_ticks, labels=[f"{tick:.1%}" for tick in y_axis_ticks])
     ax.set_ylim(0, max_lchd)
-    fig.savefig(str(workdir / f"mean_locohd.png"), dpi=200, bbox_inches="tight")
+    fig.savefig(str(target_dir / f"mean_locohd.png"), dpi=200, bbox_inches="tight")
 
     print("\nPlotting for residues done!")
 
 
-def plot_pca(x_values: np.ndarray, all_points: np.ndarray, workdir: Path):
+def plot_pca(x_values: np.ndarray, all_points: np.ndarray, target_dir: Path):
 
     print("Calculating and plotting LoCoHD principal components...")
 
@@ -259,7 +263,7 @@ def plot_pca(x_values: np.ndarray, all_points: np.ndarray, workdir: Path):
     ax.set_xlabel("$t$ / ns")
     ax.set_ylabel("PCA1")
     ax.set_title("Time Evolution of the First Principal Component")
-    fig.savefig(workdir / "pca.png", dpi=200, bbox_inches="tight")
+    fig.savefig(target_dir / "pca.png", dpi=200, bbox_inches="tight")
 
     # Plotting the first two principal component's time dependency
     ax.cla()
@@ -267,7 +271,7 @@ def plot_pca(x_values: np.ndarray, all_points: np.ndarray, workdir: Path):
     ax.set_xlabel("PCA1")
     ax.set_ylabel("PCA2")
     ax.set_title("Time Evolution of the\nFirst Two Principal Components")
-    fig.savefig(workdir / "pca_2.png", dpi=200, bbox_inches="tight")
+    fig.savefig(target_dir / "pca_2.png", dpi=200, bbox_inches="tight")
 
     # Plotting the explained variance ratio of each component
     ax.cla()
@@ -280,18 +284,18 @@ def plot_pca(x_values: np.ndarray, all_points: np.ndarray, workdir: Path):
     cumulative_expl_var = np.cumsum(pca.explained_variance_ratio_)
     cumulative_expl_var = np.append([0, ], cumulative_expl_var)
     ax.plot(np.arange(len(cumulative_expl_var)), cumulative_expl_var, c="black")
-    fig.savefig(workdir / "pca_explained_variance.png", dpi=200, bbox_inches="tight")
+    fig.savefig(target_dir / "pca_explained_variance.png", dpi=200, bbox_inches="tight")
 
     # Plotting the covariance matrix of the residues
     ax.cla()
     ax.imshow(pca.get_covariance())
     ax.set_title("Covariance Matrix between the\nLoCoHD Scores of Residues")
-    fig.savefig(workdir / "pca_cov.png", dpi=200, bbox_inches="tight")
+    fig.savefig(target_dir / "pca_cov.png", dpi=200, bbox_inches="tight")
 
     print("Principal components plotted!")
 
 
-def save_blabelled_pdb(universe: Universe, all_points: np.ndarray, workdir: Path):
+def save_blabelled_pdb(universe: Universe, all_points: np.ndarray, target_dir: Path):
 
     print("Creating and Saving b-factor labelled pdb file")
 
@@ -304,15 +308,16 @@ def save_blabelled_pdb(universe: Universe, all_points: np.ndarray, workdir: Path
     for resi, t_value in zip(universe.residues, tempfactors):
         resi.atoms.tempfactors += t_value
 
-    universe.select_atoms("protein").write(str(workdir / "b_labelled.pdb"))
+    universe.select_atoms("protein").write(str(target_dir / "b_labelled.pdb"))
 
 
 def main():
 
     # Establish working directory, data sources
-    workdir = Path("./workdir/trajectory_analysis/podocin_dimer")
-    trajectory_path = workdir / "podocin_wt_dimer_mcc_dt100.xtc"
-    structure_path = workdir / "podocin_wt_dimer_onlyProt.tpr"
+    source_dir = Path("../data_sources/trajectory_analysis/podocin_dimer")
+    target_dir = Path("../workdir/trajectory_analysis/podocin_dimer")
+    trajectory_path = source_dir / "podocin_wt_dimer_mcc_dt100.xtc"
+    structure_path = source_dir / "podocin_wt_dimer_onlyProt.tpr"
     primitive_typing_scheme_path = Path("../primitive_typings/coarse_grained_with_centroid.config.json")
 
     # Read the structure file and the trajectory
@@ -320,7 +325,7 @@ def main():
 
     # Load in or calculate the LoCoHD data
     delta_frame = 25
-    scores_path = workdir / "LoCoHD_scores.npy"
+    scores_path = target_dir / "LoCoHD_scores.npy"
     if os.path.exists(scores_path):
         print("Already calculated scores found in the working directory! I will use them for the analysis!")
         all_points = np.load(str(scores_path))
@@ -333,16 +338,16 @@ def main():
     x_values += universe.trajectory[0].time / 1000
 
     # Calculate the bimodality coefficient of the LoCoHD time dependence for every residue
-    calculate_bimodality_coeff(universe, all_points, workdir)
+    calculate_bimodality_coeff(universe, all_points, target_dir)
 
     # Plotting the first principal component's time dependency
-    plot_pca(x_values, all_points, workdir)
+    plot_pca(x_values, all_points, target_dir)
 
     # Saving a b-factor labelled structure
-    save_blabelled_pdb(universe, all_points, workdir)
+    save_blabelled_pdb(universe, all_points, target_dir)
 
     # Plotting of individual LoCoHD time dependencies
-    plot_time_dependencies(universe, x_values, all_points, delta_frame, workdir)
+    plot_time_dependencies(universe, x_values, all_points, delta_frame, target_dir)
 
 
 if __name__ == "__main__":
