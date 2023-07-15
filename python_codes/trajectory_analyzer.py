@@ -313,7 +313,7 @@ def main():
     workdir = Path("./workdir/trajectory_analysis/podocin_dimer")
     trajectory_path = workdir / "podocin_wt_dimer_mcc_dt100.xtc"
     structure_path = workdir / "podocin_wt_dimer_onlyProt.tpr"
-    primitive_typing_scheme_path = Path("./primitive_typings/coarse_grained_with_centroid.config.json")
+    primitive_typing_scheme_path = Path("../primitive_typings/coarse_grained_with_centroid.config.json")
 
     # Read the structure file and the trajectory
     universe = mda.Universe(str(structure_path), str(trajectory_path))

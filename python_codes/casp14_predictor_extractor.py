@@ -16,7 +16,8 @@ from Bio.PDB.Atom import Atom
 # Set the necessary constants. The available predictor keys are the following:
 # AF2: TS427, BAKER: TS473, BAKER-experimental: TS403, FEIG-R2: TS480, Zhang: TS129
 PREDICTOR_KEY = "TS427"
-TARFILE_ROOT = Path("/home/fazekaszs/CoreDir/PhD/PDB/casp14")
+TARFILE_ROOT = Path("../data_sources/casp14")
+TARGET_DIR = Path("../workdir/casp14")
 
 
 class InLinePDBParser(PDBParser):
@@ -125,10 +126,12 @@ def main():
 
     all_structures = {key: value for key, value in all_structures.items() if len(value) > 1}
 
-    if not os.path.exists(f"./workdir/{PREDICTOR_KEY}_results"):
-        os.mkdir(f"./workdir/{PREDICTOR_KEY}_results")
+    predictor_target_dir = TARGET_DIR / f"{PREDICTOR_KEY}_results"
+    if not os.path.exists(predictor_target_dir):
+        os.mkdir(predictor_target_dir)
 
-    with open(f"./workdir/{PREDICTOR_KEY}_results/{PREDICTOR_KEY}_structures.pickle", "wb") as f:
+    predictor_target_file = predictor_target_dir / f"{PREDICTOR_KEY}_structures.pickle"
+    with open(predictor_target_file, "wb") as f:
         pickle.dump(all_structures, f)
 
 

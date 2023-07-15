@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import tarfile
 import codecs
@@ -22,13 +23,14 @@ from casp14_predictor_extractor import filter_atoms
 #   and
 #     - T1046s1_...
 
-LDDT_TARS_PATH = Path("/home/fazekaszs/CoreDir/PhD/PDB/casp14/lDDTs")
-PREDICTOR_NAME = "TS480"
-STRUCTURE_NAME = "T1074"
-PREDICTED_SUFFIX1 = "_2"
+LDDT_TARS_PATH = Path("../data_sources/casp14/lDDTs")
+TARGET_PATH = Path("../workdir/casp14")
+PREDICTOR_NAME = "TS427"
+STRUCTURE_NAME = "T1064"
+PREDICTED_SUFFIX1 = "_1"
 PREDICTED_SUFFIX2 = "_5"
-RESI_IDX_SHIFT = 0
-MAX_LCHD = 0.5
+RESI_IDX_SHIFT = 15
+MAX_LCHD = 0.4
 
 
 def lddt_from_text(text: str):
@@ -67,10 +69,13 @@ def prat_to_pra(prat: PrimitiveAtomTemplate) -> PrimitiveAtom:
     return PrimitiveAtom(prat.primitive_type, source, prat.coordinates)
 
 
-def create_lchd_histograms(name: str,
-                           lchd_scores: np.ndarray,
-                           anchor_idxs: List[int],
-                           residues: List[PrimitiveAtomTemplate]):
+def create_lchd_histograms(
+        name: str,
+        lchd_scores: np.ndarray,
+        anchor_idxs: List[int],
+        residues: List[PrimitiveAtomTemplate],
+        output_path: Path
+):
 
     fig, ax = plt.subplots()
     first_idxs = np.argsort(lchd_scores)[::-1][:10]
@@ -94,7 +99,7 @@ def create_lchd_histograms(name: str,
     ax.set_ylabel("Residue name")
     fig.suptitle(f"Top 10 Largest per-Residue\nLoCoHD Values in {name}")
     plt.tight_layout()
-    fig.savefig(f"./workdir/{name}_top10lchd.png", dpi=300, bbox_inches="tight")
+    fig.savefig(output_path / f"{name}_top10lchd.png", dpi=300, bbox_inches="tight")
 
     plt.close(fig)
 
@@ -106,10 +111,15 @@ def main():
     pred2_name = f"{STRUCTURE_NAME}{PREDICTOR_NAME}{PREDICTED_SUFFIX2}"
 
     # Source paths.
-    pdb_dir_path = Path(f"/home/fazekaszs/CoreDir/PhD/LoCoHD/CASP14_{STRUCTURE_NAME}/pdbs")
+    pdb_dir_path = Path(f"../data_sources/casp14_{STRUCTURE_NAME}/pdbs")
     pdb_true_path = pdb_dir_path / f"{STRUCTURE_NAME}.pdb"
     pdb_pred1_path = pdb_dir_path / f"{pred1_name}.pdb"
     pdb_pred2_path = pdb_dir_path / f"{pred2_name}.pdb"
+
+    # Target path.
+    output_path = TARGET_PATH / f"{STRUCTURE_NAME}{PREDICTOR_NAME}{PREDICTED_SUFFIX1}{PREDICTED_SUFFIX2}"
+    if not os.path.exists(output_path):
+        os.mkdir(output_path)
 
     # Reading the PDB files.
     protein_true = PDBParser(QUIET=True).get_structure("true", pdb_true_path)
@@ -120,7 +130,7 @@ def main():
     filter_atoms(protein_true, protein_pred2)
 
     # Create the PrimitiveAssigner instance
-    primitive_assigner = PrimitiveAssigner(Path("primitive_typings/all_atom_with_centroid.config.json"))
+    primitive_assigner = PrimitiveAssigner(Path("../primitive_typings/all_atom_with_centroid.config.json"))
 
     # Initialize LoCoHD instance
     weight_function = WeightFunction("uniform", [3, 10])
@@ -133,7 +143,7 @@ def main():
     pra_templates_pred2 = primitive_assigner.assign_primitive_structure(protein_pred2)
 
     # Get the anchor indices
-    anchor_idxs = [
+    anchor_pairs = [
         (idx, idx)
         for idx, pra_template in enumerate(pra_templates_true)
         if pra_template.primitive_type == "Cent"
@@ -145,9 +155,9 @@ def main():
     pra_pred2 = list(map(prat_to_pra, pra_templates_pred2))
 
     # Calculate the LoCoHD values
-    lchd_values1 = lchd.from_primitives(pra_true, pra_pred1, anchor_idxs, 10.)
+    lchd_values1 = lchd.from_primitives(pra_true, pra_pred1, anchor_pairs, 10.)
     lchd_values1 = np.array(lchd_values1)
-    lchd_values2 = lchd.from_primitives(pra_true, pra_pred2, anchor_idxs, 10.)
+    lchd_values2 = lchd.from_primitives(pra_true, pra_pred2, anchor_pairs, 10.)
     lchd_values2 = np.array(lchd_values2)
 
     lchd_mean1 = np.mean(lchd_values1)
@@ -157,24 +167,25 @@ def main():
 
     # Plot the histograms for the first five residues, based on the largest
     # LoCoHD order
-    create_lchd_histograms(pred1_name, lchd_values1, [x[0] for x in anchor_idxs], pra_templates_pred1)
-    create_lchd_histograms(pred2_name, lchd_values2, [x[0] for x in anchor_idxs], pra_templates_pred2)
+    anchor_idxs = [x[0] for x in anchor_pairs]
+    create_lchd_histograms(pred1_name, lchd_values1, anchor_idxs, pra_templates_pred1, output_path)
+    create_lchd_histograms(pred2_name, lchd_values2, anchor_idxs, pra_templates_pred2, output_path)
 
     # Save the primitive structures
     pdb_str_true = primitive_assigner.generate_primitive_pdb(pra_templates_true)
-    with open(pdb_dir_path / f"{STRUCTURE_NAME}{PREDICTOR_NAME}_true_primitiveStructure.pdb", "w") as f:
+    with open(output_path / f"{STRUCTURE_NAME}{PREDICTOR_NAME}_true_primitiveStructure.pdb", "w") as f:
         f.write(pdb_str_true)
 
     pdb_str_pred1 = primitive_assigner.generate_primitive_pdb(pra_templates_pred1)
-    with open(pdb_dir_path / f"{pred1_name}_primitiveStructure.pdb", "w") as f:
+    with open(output_path / f"{pred1_name}_primitiveStructure.pdb", "w") as f:
         f.write(pdb_str_pred1)
 
     pdb_str_pred2 = primitive_assigner.generate_primitive_pdb(pra_templates_pred2)
-    with open(pdb_dir_path / f"{pred2_name}_primitiveStructure.pdb", "w") as f:
+    with open(output_path / f"{pred2_name}_primitiveStructure.pdb", "w") as f:
         f.write(pdb_str_pred2)
 
     # Set B-factors to LoCoHD values
-    for idx, (anchor_idx, _) in enumerate(anchor_idxs):
+    for idx, (anchor_idx, _) in enumerate(anchor_pairs):
 
         resi_id = pra_templates_true[anchor_idx].atom_source.source_residue
 
@@ -188,16 +199,16 @@ def main():
     io = PDBIO()
 
     io.set_structure(protein_pred1)
-    io.save(str(pdb_dir_path / f"{pred1_name}_lchd_blabelled.pdb"))
+    io.save(str(output_path / f"{pred1_name}_lchd_blabelled.pdb"))
 
     io.set_structure(protein_pred2)
-    io.save(str(pdb_dir_path / f"{pred2_name}_lchd_blabelled.pdb"))
+    io.save(str(output_path / f"{pred2_name}_lchd_blabelled.pdb"))
 
     # Load lDDT values
     lddt_values = read_lddt_values()
 
     # Set B-factors to lDDT values
-    for idx, (anchor_idx, _) in enumerate(anchor_idxs):
+    for idx, (anchor_idx, _) in enumerate(anchor_pairs):
 
         resi_id = pra_templates_true[anchor_idx].atom_source.source_residue
         resi_name = pra_templates_true[anchor_idx].atom_source.source_residue_name
@@ -211,10 +222,10 @@ def main():
             atom.bfactor = lddt_values[pred2_name][lddt_key]
 
     io.set_structure(protein_pred1)
-    io.save(str(pdb_dir_path / f"{pred1_name}_lddt_blabelled.pdb"))
+    io.save(str(output_path / f"{pred1_name}_lddt_blabelled.pdb"))
 
     io.set_structure(protein_pred2)
-    io.save(str(pdb_dir_path / f"{pred2_name}_lddt_blabelled.pdb"))
+    io.save(str(output_path / f"{pred2_name}_lddt_blabelled.pdb"))
 
 
 if __name__ == "__main__":

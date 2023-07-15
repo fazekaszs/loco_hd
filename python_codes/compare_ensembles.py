@@ -152,7 +152,7 @@ def compare_structures(prot_root_path: Path, save_dir: Path, save_name: str) -> 
     print(f"Starting {save_name}...")
 
     # Create the PrimitiveAssigner instance
-    primitive_assigner = PrimitiveAssigner(Path("primitive_typings/coarse_grained.config.json"))
+    primitive_assigner = PrimitiveAssigner(Path("../primitive_typings/coarse_grained.config.json"))
 
     # Initialize LoCoHD instance
     w_func = WeightFunction("uniform", [3., 10.])

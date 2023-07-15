@@ -48,7 +48,7 @@ def main():
     current_time = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
     output_filename = "locohd_data.pisces"
     workdir_target = Path("workdir/pisces")
-    assigner_config_path = Path("primitive_typings/coarse_grained_with_centroid.config.json")
+    assigner_config_path = Path("../primitive_typings/coarse_grained_with_centroid.config.json")
     pisces_path = Path("/home/fazekaszs/PycharmProjects/databases/pisces_220222")
     random_seed = 1994
     max_n_of_anchors = 1500
