@@ -14,16 +14,7 @@ def main():
     weight_function = WeightFunction("hyper_exp", [1., 1.])
     lchd = LoCoHD(categories, weight_function)
     points = np.random.uniform(0., 1., size=(n_of_points, 3))
-    sequence1 = np.random.choice(categories[:3], size=n_of_points)
-
-    fig, ax = plt.subplots()
-    x_delta = 0.01
-    x_values = np.arange(0, 5, x_delta)
-    y_values = np.array(weight_function.integral_vec(x_values))
-    y_prime_values = (y_values[1:] - y_values[:-1]) / x_delta
-    ax.plot(x_values, y_values)
-    ax.plot(x_values[1:], y_prime_values)
-    plt.show()
+    sequence1 = np.random.choice(categories, size=n_of_points)
 
     fig, ax = plt.subplots()
     for idx, delta in enumerate(deltas):
@@ -31,7 +22,7 @@ def main():
         directions = np.random.normal(0, 1, size=(n_of_points, 3))
         normals = np.sqrt(np.sum(directions ** 2, axis=1, keepdims=True))
         directions = points + delta * directions / normals
-        sequence2 = np.random.choice(categories[3:], size=n_of_points)
+        sequence2 = np.random.choice(categories, size=n_of_points)
 
         lchd_score = lchd.from_coords(sequence1, sequence2, points, directions)
         ax.scatter(idx * np.ones_like(lchd_score), lchd_score, c="red", alpha=0.05)

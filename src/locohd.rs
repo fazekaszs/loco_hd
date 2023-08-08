@@ -240,7 +240,7 @@ impl LoCoHD {
         if dmx_a.len() != dmx_b.len() {
 
             let err_msg = format!(
-                "Expected matrices with the same lengt, got lengths {} and {}!", 
+                "Expected matrices with the same length, got lengths {} and {}!",
                 dmx_a.len(), 
                 dmx_b.len()
             );

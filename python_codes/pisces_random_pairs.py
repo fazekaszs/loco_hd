@@ -49,7 +49,7 @@ def main():
     output_filename = "locohd_data.pisces"
     workdir_target = Path("../workdir/pisces")
     assigner_config_path = Path("../primitive_typings/coarse_grained_with_centroid.config.json")
-    pisces_path = Path("../../databases/pisces_220222")
+    pisces_dir_path = Path("../../databases/pisces_220222")
     random_seed = 1994
     max_n_of_anchors = 1500
     weight_function = ("uniform", [3, 10, ])
@@ -66,7 +66,7 @@ def main():
     # Save parameters to the working directory
     with open(workdir_path / "params.json", "w") as f:
         json.dump({
-            "assigner_config_path": str(assigner_config_path), "pisces_path": str(pisces_path),
+            "assigner_config_path": str(assigner_config_path), "pisces_path": str(pisces_dir_path),
             "random_seed": random_seed, "weight_function": weight_function,
             "tag_pairing_rule": tag_pairing_rule.get_dbg_str(), "upper_cutoff": upper_cutoff
         }, f)
@@ -80,7 +80,7 @@ def main():
     lchd = LoCoHD(primitive_assigner.all_primitive_types, weight_function, tag_pairing_rule)
 
     # Collect the PDB file names
-    pdb_files: List[str] = os.listdir(pisces_path)
+    pdb_files: List[str] = os.listdir(pisces_dir_path)
     pdb_files = list(filter(lambda x: x.endswith(".pdb"), pdb_files))
     random.seed(random_seed)
     random.shuffle(pdb_files)
@@ -91,8 +91,8 @@ def main():
 
         time_start = time()
 
-        path1 = str(pisces_path / pdb_files[pdb_idx])
-        path2 = str(pisces_path / pdb_files[pdb_idx + 1])
+        path1 = str(pisces_dir_path / pdb_files[pdb_idx])
+        path2 = str(pisces_dir_path / pdb_files[pdb_idx + 1])
 
         print(f"Starting {pdb_files[pdb_idx]} and {pdb_files[pdb_idx + 1]} - ", end="")
 

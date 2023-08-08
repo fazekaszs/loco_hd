@@ -23,12 +23,14 @@ from casp14_predictor_extractor import filter_atoms
 #   and
 #     - T1046s1_...
 
-LDDT_TARS_PATH = Path("../data_sources/casp14/lDDTs")
-TARGET_PATH = Path("../workdir/casp14")
 PREDICTOR_NAME = "TS427"
 STRUCTURE_NAME = "T1064"
 PREDICTED_SUFFIX1 = "_1"
 PREDICTED_SUFFIX2 = "_5"
+
+LDDT_TARS_PATH = Path("../data_sources/casp14/lDDTs")
+PDB_DIR_PATH = Path(f"../data_sources/casp14_{STRUCTURE_NAME}/pdbs")
+TARGET_PATH = Path("../workdir/casp14")
 RESI_IDX_SHIFT = 15
 MAX_LCHD = 0.4
 
@@ -111,10 +113,9 @@ def main():
     pred2_name = f"{STRUCTURE_NAME}{PREDICTOR_NAME}{PREDICTED_SUFFIX2}"
 
     # Source paths.
-    pdb_dir_path = Path(f"../data_sources/casp14_{STRUCTURE_NAME}/pdbs")
-    pdb_true_path = pdb_dir_path / f"{STRUCTURE_NAME}.pdb"
-    pdb_pred1_path = pdb_dir_path / f"{pred1_name}.pdb"
-    pdb_pred2_path = pdb_dir_path / f"{pred2_name}.pdb"
+    pdb_true_path = PDB_DIR_PATH / f"{STRUCTURE_NAME}.pdb"
+    pdb_pred1_path = PDB_DIR_PATH / f"{pred1_name}.pdb"
+    pdb_pred2_path = PDB_DIR_PATH / f"{pred2_name}.pdb"
 
     # Target path.
     output_path = TARGET_PATH / f"{STRUCTURE_NAME}{PREDICTOR_NAME}{PREDICTED_SUFFIX1}{PREDICTED_SUFFIX2}"

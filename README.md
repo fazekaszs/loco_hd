@@ -7,7 +7,7 @@
 
 [![doi](https://img.shields.io/badge/doi-soon-fuchsia)]()
 
-<p align="middle"><img src="https://github.com/fazekaszs/loco_hd/blob/master/locohd_logo.png" alt="logo" width=500/></p>
+<p align="middle"><img src="https://github.com/fazekaszs/loco_hd/blob/master/images/locohd_logo.png" alt="logo" width=500/></p>
 
 
 __LoCoHD__ (_Local Composition Hellinger Distance_) is a metric for comparing protein structures. It can be used for one single structure-structure comparison, for the comparison of multiple structures inside ensembles, or for the comparison of structures inside an MD simulation trajectory. It is also a general-purpose metric for labelled point clouds with variable point counts. In contrast to 
@@ -16,6 +16,9 @@ the [TM-score](https://en.wikipedia.org/wiki/Template_modeling_score),
 [lDDT](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3799472/), 
 or [GDT_TS](https://en.wikipedia.org/wiki/Global_distance_test), 
 it is based on the measurement of local composition differences, rather than of the Euclidean deviations. 
+
+If you are interested in how to run the Python scripts that are used for the creation of the article, see
+the [PY_SCRIPTS.md](PY_SCRIPTS.md) file.
 
 ## Where can I read about it?
 
@@ -60,7 +63,8 @@ And you are done!
 
 ## Running the Rust unit tests
 
-Unit tests can be run with Cargo. Since this is a PyO3 project, an additional flag is needed:
+Unit tests can be run with Cargo. Since this is a PyO3 project, an additional 
+`--no-default-features` flag is needed:
 
 ```bash
 cargo test --no-default-features
@@ -75,8 +79,9 @@ For the comparison of two protein structures with LoCoHD the following simple st
 
 ### 1. Loading the structures from pdb files
 
+The imports defined here are necessary for the following code sections.
+
 ```python
-# These imports are necessary for the union of the sections!
 from pathlib import Path
 from Bio.PDB.PDBParser import PDBParser
 from loco_hd import *
@@ -97,7 +102,8 @@ pra_templates2 = primitive_assigner.assign_primitive_structure(structure2)
 
 ### 3. Selecting the anchor atoms
 
-Here, it is assumed that the two structures contain the same number of anchor atoms and are paired in the same order. This is not necessary, since the anchor atom selection and pairing is easily customizable by just selecting the primitive atom index pairs. In these example it is only assumed to simplify things.
+Here, it is assumed that the two structures contain the same number of anchor atoms and are paired in the same order. This is not necessary, since the anchor atom selection and pairing is easily customizable by just selecting the primitive atom index pairs.
+In these examples it is only assumed to simplify things.
 
 In the case, where all atoms are anchor atoms we can use:
 
@@ -119,6 +125,18 @@ anchor_pairs = [
 ```
 
 The only important thing is that the indices inside the tuples must be valid within the first and second primitive atom (template) lists.
+An example for a more complicated pairing is given here, where we only consider `PrimitiveAtom` pairs,
+where one has a primitive type of `"O_neg"` and the other has a primitive type of `"C_aro"`:
+
+```python
+anchor_pairs = [
+    (idx_a, idx_b)
+    for idx_a, prat_a in enumerate(pra_templates1)
+    if prat_a.primitive_type == "O_neg"
+    for idx_b, prat_b in enumerate(pra_templates2)
+    if prat_b.primitive_type == "C_aro"
+]
+```
 
 ### 4. Conversion of ```PrimitiveAtomTemplate``` instances to ```PrimitiveAtom``` instances
 
