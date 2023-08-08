@@ -27,6 +27,10 @@ Modify the `param_sets` variable if you want to try out additional weight functi
     An example output for Experiment 1
 </p>
 
+__Expected runtime:__ few seconds
+
+__Input files needed:__ none
+
 ## Experiment 2: `simple_test.py`
 
 (_The output of this experiment was not described in the article._)
@@ -85,6 +89,10 @@ In this case, we expect "all 1" LoCoHD scores at all delta values.
     An example output for Experiment 2
 </p>
 
+__Expected runtime:__ "instant"
+
+__Input files needed:__ none
+
 ## Experiment 3: `casp14_compare_structures.py`
 
 This will compare two structures coming from the same CASP14 contestant for
@@ -120,6 +128,10 @@ while the maximum LoCoHD score shown can also be set by the `MAX_LCHD` variable.
     An example output for Experiment 3
 </p>
 
+__Expected runtime:__ few seconds
+
+__Input files needed:__ all downloadable, see the description above
+
 ## Experiment 4: `casp14_predictor_extractor.py` and `casp14_predictor_test.py`
 
 This experiment consists of 2 parts:
@@ -140,6 +152,11 @@ This file will be read by `casp14_predictor_test.py`, so running the previous sc
 necessary for it to succeed. It will also use lDDT info containing tar files that can be
 downloaded from one of the links in Experiment 3. Download all of these files into 
 `../data_sources/casp14/lDDTs` (corresponding variable: `LDDT_TARS_PATH`).
+To download all files from here, you can use:
+
+```bash
+wget --no-parent -r https://predictioncenter.org/download_area/CASP14/results/lddt/
+```
 
 The outputs will be 
 - images for all predictions, showing individual residue lDDT vs. LoCoHD scatter plots, 
@@ -154,6 +171,10 @@ The outputs will be
     <br/>
     Example outputs for Experiment 4
 </p>
+
+__Expected runtime:__ few minutes
+
+__Input files needed:__ all downloadable, see the description above
 
 ## Experiment 5: `pisces_downloader.py`, `pisces_random_pairs.py` and `pisces_random_pairs_analyze.py`
 
@@ -190,6 +211,11 @@ and a beta-distribution fit of the random LoCoHD scores and a `fitting_params.tx
     An example output for Experiment 5
 </p>
 
+__Expected runtime:__ few ten minutes (without `pisces_downloader.py`, which is
+highly internet-speed dependent)
+
+__Input files needed:__ all downloadable, see the description above
+
 ## Experiment 6: `compare_ensembles.py`
 
 Modify the `save_dir` and `paths_and_names` variables in `main` to your own needs.
@@ -209,6 +235,10 @@ RMSD vs. LoCoHD scatter plots, and B-factor labelled primitive atom pdb files.
     <br/>
     Example outputs for Experiment 6
 </p>
+
+__Expected runtime:__ few minutes
+
+__Input files needed:__ all downloadable, see the article
 
 ## Experiment 7: `trajectory_analyzer.py`
 
@@ -236,6 +266,10 @@ It will output the following files:
     Example outputs for Experiment 7
 </p>
 
+__Expected runtime:__ few minutes
+
+__Input files needed:__ due to the large size of trajectory files, this dataset is not supplied
+
 ## Experiment 8: `kras_scan.py`
 
 (_The output of this experiment was not described in the article._)
@@ -260,3 +294,7 @@ Right now it is set to be the O2 prime atom of the GDP molecule.
     <br/>
     On the right: same as on the left, but with the KRas cartoon model shown
 </p>
+
+__Expected runtime:__ few seconds
+
+__Input files needed:__ download 4obe from [here](https://www.rcsb.org/structure/4OBE)

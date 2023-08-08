@@ -15,16 +15,75 @@ __LoCoHD__ (_Local Composition Hellinger Distance_) is a metric for comparing pr
 the [TM-score](https://en.wikipedia.org/wiki/Template_modeling_score), 
 [lDDT](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3799472/), 
 or [GDT_TS](https://en.wikipedia.org/wiki/Global_distance_test), 
-it is based on the measurement of local composition differences, rather than of the Euclidean deviations. 
-
-If you are interested in how to run the Python scripts that are used for the creation of the article, see
-the [PY_SCRIPTS.md](PY_SCRIPTS.md) file.
+it is based on the measurement of local composition differences, rather than of the Euclidean deviations.
 
 ## Where can I read about it?
 
 This work is yet to be published in a scientific journal.
 
+## Demo scripts
+
+If you are interested in how to run the Python scripts that are used for the creation of the article, see
+the [PY_SCRIPTS.md](PY_SCRIPTS.md) file.
+
+## System requirements
+
+### Software dependencies
+
+LoCoHD is a Python3 package, so it most definitely requires Python3.
+Additionally, it also needs BioPython and Numpy. It was tested with
+- Python version 3.10.10,
+- BioPython version 1.81,
+- Numpy version 1.21.6.
+
+Its build-dependencies are Rust (tested with `rustc` version 1.70.70) and
+Maturin (tested with version 0.14.15).
+
+Some of the scripts in `python_codes` use other packages too:
+- Matplotlib version 3.7.1
+- SciPy version 1.10.0
+- MDAnalysis version 2.4.2
+- scikit-learn version 1.2.1
+
+The full package and scripts were tested on Linux (Pop!_OS 22.04 LTS).
+Installation was tested on Pop!_OS and OpenSUSE Leap 15.3.
+
+### Hardware requirements
+
+No special hardware is needed to run LoCoHD. It was written and tested on a
+laptop with the following specs:
+- Model = Dell Latitude 5490
+- RAM = 16 Gb
+- Processor = Intel Core i5-8250U CPU @ 1.60GHz x 8
+
+Since it doesn't need much RAM and CPU power to run, theoretically it can be also
+ran on less capable machines. 
+
 ## How can I install it?
+
+Whatever installation method you choose, you definitely need to install 
+[Rust](https://www.rust-lang.org/tools/install) to your system.
+To do this you can choose from several methods. Either you install Rust usind the
+"standard" way with the official script:
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+which installs Rust globally, or if you are using an environment manager, like 
+[Anaconda](https://www.anaconda.com/),
+[Miniconda](https://docs.conda.io/en/latest/miniconda.html),
+or [Mambaforge](https://github.com/conda-forge/miniforge#mambaforge),
+you can simply install Rust with
+
+```bash
+conda install -c conda-forge rust
+```
+
+If you are a Windows user, 
+visit [this](https://forge.rust-lang.org/infra/other-installation-methods.html) link.
+
+The overall installation time does not exceed a few minutes.
 
 ### From PyPI
 
@@ -36,14 +95,18 @@ pip install loco-hd
 
 ### Building from source
 
-To build LoCoHD from source, first you need to install [Rust]((https://www.rust-lang.org/tools/install)) to your system. You also need Python3, pip, and the package [Maturin](https://github.com/PyO3/maturin). Both Rust and Maturin can be installed with the following one-liners:
+Besides Rust, you will also need Python3, pip, and the package [Maturin](https://github.com/PyO3/maturin) if you choose
+building from source. Maturin can be installed with the following one-liner:
 
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
 
 ```bash
 pip install maturin
+```
+
+or
+
+```bash
+conda install -c conda-forge maturin
 ```
 
 Next, clone the repository and enter it:
