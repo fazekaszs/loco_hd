@@ -149,8 +149,8 @@ The outputs will be
 - a markdown (md file) describing global statistics.
 
 <p align="middle">
-    <img src="https://github.com/fazekaszs/loco_hd/blob/master/images/exp4_1.png" alt="exp4_1" width=300">
-    <img src="https://github.com/fazekaszs/loco_hd/blob/master/images/exp4_2.png" alt="exp4_2" width=300">
+    <img src="https://github.com/fazekaszs/loco_hd/blob/master/images/exp4_1.png" alt="exp4_1" width=400">
+    <img src="https://github.com/fazekaszs/loco_hd/blob/master/images/exp4_2.png" alt="exp4_2" width=400">
     <br/>
     Example outputs for Experiment 4
 </p>
@@ -174,7 +174,9 @@ calculate their corresponding LoCoHD values. Read through the variables in the b
 
 Lastly, use `pisces_random_pairs_analyze.py` to calculate the random environment pairing 
 statistics. Here, you only have to set the variables `data_source_dir` and `data_source_name`,
-so that they aggree with the outputs of the previous script.
+so that they aggree with the outputs of the previous script. (Right now, this script is a bit
+"overcomplicated", because it uses the Welford online algorithm to calculate the global average
+and variance.)
 
 What you will get are tsv files describing the statistics of different residue-category pairs.
 For example, the `charge_statistics.tsv` file will partition residue-category pair observations
@@ -202,14 +204,59 @@ This script will output the aforementioned heatmaps and primitive atom LoCoHD sc
 RMSD vs. LoCoHD scatter plots, and B-factor labelled primitive atom pdb files.
 
 <p align="middle">
-    <img src="https://github.com/fazekaszs/loco_hd/blob/master/images/exp6_1.png" alt="exp6_1" width=300">
-    <img src="https://github.com/fazekaszs/loco_hd/blob/master/images/exp6_2.png" alt="exp6_2" width=300">
+    <img src="https://github.com/fazekaszs/loco_hd/blob/master/images/exp6_1.png" alt="exp6_1" width=400">
+    <img src="https://github.com/fazekaszs/loco_hd/blob/master/images/exp6_2.png" alt="exp6_2" width=400">
     <br/>
-    An example output for Experiment 6
+    Example outputs for Experiment 6
 </p>
 
 ## Experiment 7: `trajectory_analyzer.py`
 
 Again, in the `main` function modify the `source_dir` and `target_dir` variables.
 The `source_dir` directory should contain an xtc trajectory file and a tpr structure
-file of an MD simulation (see the variables `trajectory_path` and `structure_path`).
+file of an MD simulation (see the variables `trajectory_path` and `structure_path`). Running
+this script will analyze the evolution of the LoCoHD scores of individual residues.
+It will output the following files:
+
+- a LoCoHD score time dependence graphs for every residue in the protein,
+- a B-factor labelled pdb file, which (in contrast to the previous B-factor labelled
+  files) will label each residue according to the __standard deviation__ of its LoCoHD
+  score,
+- a graph showing the mean residue LoCoHD score time dependence,
+- a graph showing the time evolution of the LoCoHD score vector's first principal component,
+- a scatter plot showing the time evolution of the LoCoHD score vector's first and second principal components,
+- the covariance matrix of the residue LoCoHD scores,
+- the explained variance graph of the residue LoCoHD scores' PCA,
+- a text file, containing the Sarle's bimodality coefficient of each residue's LoCoHD score.
+
+<p align="middle">
+    <img src="https://github.com/fazekaszs/loco_hd/blob/master/images/exp7_1.png" alt="exp7_1" width=400">
+    <img src="https://github.com/fazekaszs/loco_hd/blob/master/images/exp7_2.png" alt="exp7_2" width=400">
+    <br/>
+    Example outputs for Experiment 7
+</p>
+
+## Experiment 8: `kras_scan.py`
+
+(_The output of this experiment was not described in the article._)
+
+This script scans the points around a KRas chain (PDB ID: 4obe) and compares the 
+environment of these points with the LoCoHD algorithm to the environment of a chosen atom. 
+Then, it will output the B-factor labelled point cloud to a pdb file. The B-factors are 
+the p-values of the LoCoHD scores (the p-value comes from the distribution of LoCoHD scores
+calculated in Experiment 5). The point clouds can be colored in PyMol according to their B-factors,
+which results in a heatmap of environmental similarities to the chosen atom.
+
+To modify the selected atom modify the `ref_coord` variable in the `main` function.
+Right now it is set to be the O2 prime atom of the GDP molecule.
+
+<p align="middle">
+    <img src="https://github.com/fazekaszs/loco_hd/blob/master/images/exp8_1.png" alt="exp8_1" width=400">
+    <img src="https://github.com/fazekaszs/loco_hd/blob/master/images/exp8_2.png" alt="exp8_2" width=400">
+    <br/>
+    Example outputs for Experiment 8
+    <br/>
+    On the left: B-factor colored point cloud (blue = low, red = high)
+    <br/>
+    On the right: same as on the left, but with the KRas cartoon model shown
+</p>
