@@ -74,3 +74,4 @@ docs/_build/
 # python workdir
 workdir/
 data_sources/
+ring-3.0.0/
