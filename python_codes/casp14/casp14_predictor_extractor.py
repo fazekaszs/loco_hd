@@ -16,8 +16,8 @@ from Bio.PDB.Atom import Atom
 # Set the necessary constants. The available predictor keys are the following:
 # AF2: TS427, BAKER: TS473, BAKER-experimental: TS403, FEIG-R2: TS480, Zhang: TS129
 PREDICTOR_KEY = "TS427"
-TARFILE_ROOT = Path("../data_sources/casp14")
-TARGET_DIR = Path("../workdir/casp14")
+TARFILE_ROOT = Path("../../data_sources/casp14")
+TARGET_DIR = Path("../../workdir/casp14")
 
 
 class InLinePDBParser(PDBParser):

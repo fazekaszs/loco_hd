@@ -12,13 +12,19 @@ import matplotlib.pyplot as plt
 from scipy.stats import pearsonr, spearmanr
 
 RING_FILE_PATH = Path("../ring-3.0.0/ring/bin/ring")
-PISCES_DIR_PATH = Path("../../../PycharmProjects/databases/pisces_220222")
+PISCES_DIR_PATH = Path("../../PycharmProjects/databases/pisces_220222")
 OUTPUT_PATH = Path("../workdir/pisces/ring_result")
 INTERACTIONS = [
     "HBOND", "VDW", "SSBOND", "IONIC", "PIPISTACK", "PICATION"
 ]
 OUT_FILE_NAME = "collected.pickle"
 PISCES_LOCOHD_FILE_PATH = Path("../workdir/pisces/run_2023-02-08-12-50-23/locohd_data.pisces")
+RESI_TLCS = [
+    "GLY", "ALA", "VAL", "ILE", "LEU", "PHE",
+    "SER", "THR", "TYR", "ASP", "GLU", "ASN",
+    "GLN", "TRP", "HIS", "MET", "PRO", "CYS",
+    "ARG", "LYS"
+]
 
 
 def run_ring():
@@ -120,15 +126,8 @@ def tlc_to_one_hot(tlc: str):
     :return: The one-hot encoded vector.
     """
 
-    all_tlcs = [
-        "GLY", "ALA", "VAL", "ILE", "LEU", "PHE",
-        "SER", "THR", "TYR", "ASP", "GLU", "ASN",
-        "GLN", "TRP", "HIS", "MET", "PRO", "CYS",
-        "ARG", "LYS"
-    ]
-
-    out = np.zeros(len(all_tlcs))
-    out[all_tlcs.index(tlc)] = 1
+    out = np.zeros(len(RESI_TLCS))
+    out[RESI_TLCS.index(tlc)] = 1
 
     return out
 
@@ -163,7 +162,7 @@ def data_for_training(ring_data: Dict[str, np.ndarray]):
 
 def create_ffnn():
     """
-    Creates a feedforward neural network model. It should have two inputs and must be symmetric
+    Creates a siamese feedforward neural network model. It should have two inputs and must be symmetric
     to input swapping, since it will try to mimic a metric.
 
     :return: The neural network model.
@@ -195,6 +194,43 @@ def create_ffnn():
     return ffnn
 
 
+def test_interaction_dependence(feature_vecs: np.ndarray, ffnn: tf.keras.Model):
+
+    out_matrix = list()
+
+    for idx, resname in enumerate(RESI_TLCS):
+
+        resi_mask = feature_vecs[:, idx] == 1
+        interaction_mask = np.max(feature_vecs[resi_mask, -len(INTERACTIONS):], axis=0) != 0
+
+        t_in1 = np.zeros(len(RESI_TLCS) + len(INTERACTIONS), dtype=float)
+        t_in1[idx] = 1.  # a residue without interactions
+        t_in1 = t_in1[np.newaxis, ...]  # add batch dim
+
+        t_in2 = list()
+        for interaction_idx, flag in enumerate(interaction_mask):
+
+            # leave out interactions that are not formed by the current residue
+            if not flag:
+                continue
+
+            current_t_in2 = np.copy(t_in1)
+            current_t_in2[0, len(RESI_TLCS) + interaction_idx] = 1.  # set interaction type
+            t_in2.append(current_t_in2)
+
+        t_in2 = np.concatenate(t_in2, axis=0)
+        t_in1 = np.repeat(t_in1, len(t_in2), axis=0)  # repeat along batch dim
+
+        prediction = ffnn.predict_on_batch([t_in1, t_in2])
+        matrix_line = np.full(len(INTERACTIONS), fill_value=np.nan, dtype=float)
+        matrix_line[interaction_mask] = prediction
+        out_matrix.append(matrix_line)
+
+    out_matrix = np.array(out_matrix)
+
+    return out_matrix
+
+
 def main():
 
     if os.path.exists(OUTPUT_PATH / OUT_FILE_NAME):
@@ -212,9 +248,13 @@ def main():
 
     t_in1, t_in2, t_out = data_for_training(ring_data)
 
+    all_inputs = np.concatenate([t_in1, t_in2], axis=0)
+
     ffnn = create_ffnn()
     ffnn.summary()
     ffnn.fit(x=[t_in1, t_in2], y=t_out, batch_size=64, epochs=3, validation_split=0.2)
+
+    interaction_dependence_mx = test_interaction_dependence(all_inputs, ffnn)
 
     y_pred = ffnn.predict_on_batch([t_in1, t_in2])
 
@@ -222,8 +262,23 @@ def main():
 
     print(f"Correlation:\nPearson = {corr_p}\nSpearman = {corr_s}")
 
-    fig, ax = plt.subplots()
-    ax.scatter(y_pred[::5], t_out[::5], alpha=0.05)
+    fig, ax = plt.subplots(1, 2)
+    ax[0].hist2d(y_pred, t_out, bins=100, cmap="hot")
+
+    ax[1].imshow(interaction_dependence_mx, cmap="autumn")
+    ax[1].set_xticks(np.arange(len(INTERACTIONS)), labels=INTERACTIONS, rotation=90)
+    ax[1].set_yticks(np.arange(len(RESI_TLCS)), labels=RESI_TLCS)
+
+    for x_idx in range(len(RESI_TLCS)):
+        for y_idx in range(len(INTERACTIONS)):
+
+            current_value = interaction_dependence_mx[x_idx, y_idx]
+            if np.isnan(current_value):
+                continue
+
+            ax[1].text(y_idx, x_idx, f"{current_value:.1%}", ha="center", va="center", color="black")
+
+    ax[1].set_aspect(len(INTERACTIONS) / len(RESI_TLCS))
 
     plt.show()
 

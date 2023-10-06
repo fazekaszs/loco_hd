@@ -274,7 +274,7 @@ def fit_beta_to_samples(lchd_values: List[float]):
 
 def main():
 
-    data_source_dir = Path("../workdir/pisces")
+    data_source_dir = Path("../../workdir/pisces")
     # data_source = "run_2023-01-10-11-52-33"
     data_source_name = "run_2023-02-08-12-50-23"
 

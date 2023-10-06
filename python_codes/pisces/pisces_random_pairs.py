@@ -17,6 +17,17 @@ from Bio.PDB.Model import Model
 
 from loco_hd import LoCoHD, PrimitiveAtom, WeightFunction, PrimitiveAssigner, PrimitiveAtomTemplate, TagPairingRule
 
+CURRENT_TIME = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+OUTPUT_FILENAME = "locohd_data.pisces"
+WORKDIR_TARGET = Path("../../workdir/pisces")
+ASSIGNER_CONFIG_PATH = Path("../../primitive_typings/coarse_grained_with_centroid.config.json")
+PISCES_DIR_PATH = Path("../../databases/pisces_220222")
+RANDOM_SEED = 1994
+MAX_N_OF_ANCHORS = 1500
+WEIGHT_FUNCTION = ("uniform", [3, 10, ])
+TAG_PAIRING_RULE = TagPairingRule({"accept_same": False})
+UPPER_CUTOFF = 10
+
 
 def is_anchor_atom(pra_template: PrimitiveAtomTemplate) -> bool:
 
@@ -44,20 +55,8 @@ def get_anchors_and_primitive_atoms(pra_templates: List[PrimitiveAtomTemplate],
 
 def main():
 
-    # Parameters
-    current_time = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-    output_filename = "locohd_data.pisces"
-    workdir_target = Path("../workdir/pisces")
-    assigner_config_path = Path("../primitive_typings/coarse_grained_with_centroid.config.json")
-    pisces_dir_path = Path("../../databases/pisces_220222")
-    random_seed = 1994
-    max_n_of_anchors = 1500
-    weight_function = ("uniform", [3, 10, ])
-    tag_pairing_rule = TagPairingRule({"accept_same": False})
-    upper_cutoff = 10
-
     # Create working directory
-    workdir_path = workdir_target / f"run_{current_time}"
+    workdir_path = WORKDIR_TARGET / f"run_{CURRENT_TIME}"
     if os.path.exists(workdir_path):
         raise Exception(f"Workdir at {workdir_path} already exists!")
     else:
@@ -66,23 +65,23 @@ def main():
     # Save parameters to the working directory
     with open(workdir_path / "params.json", "w") as f:
         json.dump({
-            "assigner_config_path": str(assigner_config_path), "pisces_path": str(pisces_dir_path),
-            "random_seed": random_seed, "weight_function": weight_function,
-            "tag_pairing_rule": tag_pairing_rule.get_dbg_str(), "upper_cutoff": upper_cutoff
+            "assigner_config_path": str(ASSIGNER_CONFIG_PATH), "pisces_path": str(PISCES_DIR_PATH),
+            "random_seed": RANDOM_SEED, "weight_function": WEIGHT_FUNCTION,
+            "tag_pairing_rule": TAG_PAIRING_RULE.get_dbg_str(), "upper_cutoff": UPPER_CUTOFF
         }, f)
 
     # Save the assigner config to the working directory
-    shutil.copyfile(assigner_config_path, workdir_path / "assigner_config.json")
+    shutil.copyfile(ASSIGNER_CONFIG_PATH, workdir_path / "assigner_config.json")
 
     # Initialize the assigner and locohd
-    primitive_assigner = PrimitiveAssigner(assigner_config_path)
-    weight_function = WeightFunction(*weight_function)
-    lchd = LoCoHD(primitive_assigner.all_primitive_types, weight_function, tag_pairing_rule)
+    primitive_assigner = PrimitiveAssigner(ASSIGNER_CONFIG_PATH)
+    weight_function = WeightFunction(*WEIGHT_FUNCTION)
+    lchd = LoCoHD(primitive_assigner.all_primitive_types, weight_function, TAG_PAIRING_RULE)
 
     # Collect the PDB file names
-    pdb_files: List[str] = os.listdir(pisces_dir_path)
+    pdb_files: List[str] = os.listdir(PISCES_DIR_PATH)
     pdb_files = list(filter(lambda x: x.endswith(".pdb"), pdb_files))
-    random.seed(random_seed)
+    random.seed(RANDOM_SEED)
     random.shuffle(pdb_files)
 
     time_per_anchor_list = list()
@@ -91,8 +90,8 @@ def main():
 
         time_start = time()
 
-        path1 = str(pisces_dir_path / pdb_files[pdb_idx])
-        path2 = str(pisces_dir_path / pdb_files[pdb_idx + 1])
+        path1 = str(PISCES_DIR_PATH / pdb_files[pdb_idx])
+        path2 = str(PISCES_DIR_PATH / pdb_files[pdb_idx + 1])
 
         print(f"Starting {pdb_files[pdb_idx]} and {pdb_files[pdb_idx + 1]} - ", end="")
 
@@ -115,12 +114,12 @@ def main():
         anchor_pairs = [(x, y) for x, y in zip(anchors1, anchors2)]
 
         # Chop down the list of anchor indices if it exceeds an upper limit.
-        anchor_pairs = anchor_pairs[:max_n_of_anchors] if len(anchor_pairs) > max_n_of_anchors else anchor_pairs
+        anchor_pairs = anchor_pairs[:MAX_N_OF_ANCHORS] if len(anchor_pairs) > MAX_N_OF_ANCHORS else anchor_pairs
 
         print(f"Number of anchors: {len(anchor_pairs)} - ", end="")
 
         # Start LoCoHD calculations.
-        lchd_scores = lchd.from_primitives(primitive_atoms1, primitive_atoms2, anchor_pairs, upper_cutoff)
+        lchd_scores = lchd.from_primitives(primitive_atoms1, primitive_atoms2, anchor_pairs, UPPER_CUTOFF)
 
         print(f"Calculation #{pdb_idx + 1} OK! Avg. LoCoHD: {np.mean(lchd_scores):.2%}")
 
@@ -133,11 +132,11 @@ def main():
             pair_id2 = f"{pdb_id2}/{primitive_atoms2[anchor[1]].tag}"
             cumulative_results.append((pair_id1, pair_id2, lchd_score))
 
-        if os.path.exists(workdir_path / output_filename):
-            with open(workdir_path / output_filename, "rb") as f:
+        if os.path.exists(workdir_path / OUTPUT_FILENAME):
+            with open(workdir_path / OUTPUT_FILENAME, "rb") as f:
                 cumulative_results += pickle.load(f)
 
-        with open(workdir_path / output_filename, "wb") as f:
+        with open(workdir_path / OUTPUT_FILENAME, "wb") as f:
             pickle.dump(cumulative_results, f)
 
         print("Cumulative results successfully saved!")

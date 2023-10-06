@@ -12,24 +12,28 @@ from Bio.PDB.Residue import Residue, DisorderedResidue
 from Bio.PDB.Atom import Atom, DisorderedAtom
 from Bio.PDB.PDBIO import PDBIO
 
-allowed_elements = ["C", "S", "N", "O"]
-
-allowed_altloc = [" ", "A"]
-
-resi_tlcs = ["GLY", "ALA", "VAL", "ILE", "LEU",
-             "PHE", "SER", "THR", "TYR", "ASP",
-             "GLU", "ASN", "GLN", "CYS", "MET",
-             "PRO", "LYS", "ARG", "TRP", "HIS"]
-
-resi_olcs = ["G", "A", "V", "I", "L",
-             "F", "S", "T", "Y", "D",
-             "E", "N", "Q", "C", "M",
-             "P", "K", "R", "W", "H"]
-
-resi_counts = [4, 5, 7, 8, 8,
-               11, 6, 7, 12, 8,
-               9, 8, 9, 6, 8,
-               7, 9, 11, 14, 10]
+ALLOWED_ELEMENTS = ["C", "S", "N", "O"]
+ALLOWED_ALTLOC = [" ", "A"]
+RESI_TLCS = [
+    "GLY", "ALA", "VAL", "ILE", "LEU",
+    "PHE", "SER", "THR", "TYR", "ASP",
+    "GLU", "ASN", "GLN", "CYS", "MET",
+    "PRO", "LYS", "ARG", "TRP", "HIS"
+]
+RESI_OLCS = [
+    "G", "A", "V", "I", "L",
+    "F", "S", "T", "Y", "D",
+    "E", "N", "Q", "C", "M",
+    "P", "K", "R", "W", "H"
+]
+RESI_ATOM_COUNTS = [
+    4, 5, 7, 8, 8,
+    11, 6, 7, 12, 8,
+    9, 8, 9, 6, 8,
+    7, 9, 11, 14, 10
+]
+PISCES_DIR = Path("../../data_sources/pisces")
+PISCES_FILENAME = "cullpdb_pc25.0_res0.0-2.0_noBrks_noDsdr_len40-300_R0.25_Xray+Nmr_d2022_02_21_chains3501"
 
 
 def download_pisces(pisces_source: Path, file_target: Path):
@@ -126,7 +130,7 @@ def download_pisces(pisces_source: Path, file_target: Path):
             current_full_id = list(atom.get_full_id())  # Convert tuple to list.
             current_full_id[-1] = current_full_id[-1][0]  # Remove altloc id.
 
-            if atom.element not in allowed_elements:
+            if atom.element not in ALLOWED_ELEMENTS:
                 atoms_to_remove.append(current_full_id)
             elif type(atom) == DisorderedAtom:
                 disordered_atoms.append(current_full_id)
@@ -166,11 +170,11 @@ def download_pisces(pisces_source: Path, file_target: Path):
             for residue in chain.child_list:
 
                 # Assert correct residue naming.
-                if residue.resname not in resi_tlcs:
+                if residue.resname not in RESI_TLCS:
                     residues_to_remove.append(residue.get_id())
 
                 # Assert correct atom count in residue.
-                elif len(residue) != resi_counts[resi_tlcs.index(residue.resname)]:
+                elif len(residue) != RESI_ATOM_COUNTS[RESI_TLCS.index(residue.resname)]:
                     residues_to_remove.append(residue.get_id())
 
             for resi_id in residues_to_remove:
@@ -217,10 +221,7 @@ def download_pisces(pisces_source: Path, file_target: Path):
 
 
 def main():
-
-    pisces_dir = Path("../data_sources/pisces")
-    pisces_file = pisces_dir / "cullpdb_pc25.0_res0.0-2.0_noBrks_noDsdr_len40-300_R0.25_Xray+Nmr_d2022_02_21_chains3501"
-    download_pisces(pisces_file, pisces_dir)
+    download_pisces(PISCES_DIR / PISCES_FILENAME, PISCES_DIR)
 
 
 if __name__ == "__main__":

@@ -18,7 +18,7 @@ from loco_hd import LoCoHD, PrimitiveAtom, WeightFunction, PrimitiveAssigner, Pr
 
 # Set the necessary paths. The available predictor keys are the following:
 # AF2: TS427, BAKER: TS473, BAKER-experimental: TS403, FEIG-R2: TS480, Zhang: TS129
-LDDT_TARS_PATH = Path("../data_sources/casp14/lDDTs")
+LDDT_TARS_PATH = Path("../../data_sources/casp14/lDDTs")
 PREDICTOR_KEY = "TS129"
 WORKDIR = Path(f"../workdir/casp14/{PREDICTOR_KEY}_results")
 
@@ -186,7 +186,7 @@ def create_plot(key: str, lchd_scores: List[float], lddt_scores: List[float], sp
 def main():
 
     # Create the primitive assigner
-    primitive_assigner = PrimitiveAssigner(Path("../primitive_typings/all_atom_with_centroid.config.json"))
+    primitive_assigner = PrimitiveAssigner(Path("../../primitive_typings/all_atom_with_centroid.config.json"))
 
     # Create the LoCoHD instance.
     w_func = WeightFunction("uniform", [3, 10])
