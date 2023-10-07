@@ -46,6 +46,8 @@ RESI_PROPERTIES = {
     "LYS": ["-", "LYS", "positive", "non-aromatic", "hydrophilic", "large", "intermediate", "intermediate"],
     "PRO": ["-", "PRO", "neutral", "non-aromatic", "hydrophilic", "small", "low", "low"]
 }
+DATA_SOURCE_DIR = Path("../../workdir/pisces")
+DATA_SOURCE_NAME = "run_2023-02-08-12-50-23"
 
 
 class AdvancedWelfordStatistics:
@@ -274,13 +276,9 @@ def fit_beta_to_samples(lchd_values: List[float]):
 
 def main():
 
-    data_source_dir = Path("../../workdir/pisces")
-    # data_source = "run_2023-01-10-11-52-33"
-    data_source_name = "run_2023-02-08-12-50-23"
+    print(f"Opening directory: \"{DATA_SOURCE_NAME}\" at \"{DATA_SOURCE_DIR}\"")
 
-    print(f"Opening directory: \"{data_source_name}\" at \"{data_source_dir}\"")
-
-    with open(data_source_dir / data_source_name / "locohd_data.pisces", "rb") as f:
+    with open(DATA_SOURCE_DIR / DATA_SOURCE_NAME / "locohd_data.pisces", "rb") as f:
         data: List[Tuple[str, str, float]] = pickle.load(f)
 
     print(f"Number of samples: {len(data)}. Starting to generate statistics...")
@@ -294,7 +292,7 @@ def main():
     # Saving the statistics.
 
     print("tsvs created! Saving tsv tables...")
-    analysis_dir_path = data_source_dir / data_source_name / "analysis"
+    analysis_dir_path = DATA_SOURCE_DIR / DATA_SOURCE_NAME / "analysis"
     if not os.path.exists(analysis_dir_path):
         os.mkdir(analysis_dir_path)
 

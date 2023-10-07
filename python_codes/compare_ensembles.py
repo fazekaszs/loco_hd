@@ -20,6 +20,18 @@ from loco_hd import LoCoHD, WeightFunction, PrimitiveAssigner, PrimitiveAtomTemp
 
 ATOM_ID = Tuple[int, str]
 
+SAVE_DIR = Path("../workdir/prot_batch_resuls")
+PATHS_AND_NAMES = [
+    # ("../data_sources/pdb_files/h5/dummy", "h5_dummy"),
+    ("../data_sources/pdb_files/h5/277", "h5_277"),
+    ("../data_sources/pdb_files/h5/288", "h5_288"),
+    ("../data_sources/pdb_files/h5/299", "h5_299"),
+    ("../data_sources/pdb_files/h5/310", "h5_310"),
+    ("../data_sources/pdb_files/h5/321", "h5_321"),
+    # ("../data_sources/pdb_files/PED00075e000", "PED00075e000"),
+    # ("../data_sources/pdb_files/PED00072e000", "PED00072e000"),
+]
+
 
 class AtomSelector(Select):
 
@@ -71,7 +83,6 @@ def plot_result(in_dict: Dict[str, Any]):
     lchd_by_atom: np.ndarray = in_dict["lchd_by_atom"]
     dmx_lchd_min: float = in_dict["dmx_lchd_min"]
     dmx_lchd_max: float = in_dict["dmx_lchd_max"]
-    save_dir: Path = in_dict["save_dir"]
     save_name: str = in_dict["save_name"]
 
     fig, ax = plt.subplots(1, 2)
@@ -122,7 +133,7 @@ def plot_result(in_dict: Dict[str, Any]):
                  framealpha=0.7, handlelength=0, handletextpad=0)
 
     plt.tight_layout()
-    fig.savefig(save_dir / f"{save_name}_plot.png", dpi=300)
+    fig.savefig(SAVE_DIR / f"{save_name}_plot.png", dpi=300)
 
     # Plotting the LoCoHD - RMSD relation
     # This goes to a new plot!
@@ -144,10 +155,10 @@ def plot_result(in_dict: Dict[str, Any]):
     ax.set_xticks(plot_ticks, labels=[f"{tick:.1%}" for tick in plot_ticks])
 
     plt.tight_layout()
-    fig.savefig(save_dir / f"{save_name}_with_rmsd.png", dpi=300)
+    fig.savefig(SAVE_DIR / f"{save_name}_with_rmsd.png", dpi=300)
 
 
-def compare_structures(prot_root_path: Path, save_dir: Path, save_name: str) -> Dict[str, Any]:
+def compare_structures(prot_root_path: Path, save_name: str) -> Dict[str, Any]:
 
     print(f"Starting {save_name}...")
 
@@ -281,7 +292,7 @@ def compare_structures(prot_root_path: Path, save_dir: Path, save_name: str) -> 
 
     # Save raw dmx data
     raw_save_name = save_name + "_rawDmxData.pickle"
-    with open(save_dir / raw_save_name, "wb") as f:
+    with open(SAVE_DIR / raw_save_name, "wb") as f:
         pickle.dump({
             "lchd_dmx": lchd_dmx,
             "rmsd_dmx": rmsd_dmx,
@@ -293,7 +304,7 @@ def compare_structures(prot_root_path: Path, save_dir: Path, save_name: str) -> 
     b_labelled_pdb = primitive_assigner.generate_primitive_pdb(template_lists[0], b_labels=lchd_by_atom)
 
     pdb_save_name = save_name + "_blabelled.pdb"
-    with open(save_dir / pdb_save_name, "w") as f:
+    with open(SAVE_DIR / pdb_save_name, "w") as f:
         f.write(b_labelled_pdb)
 
     print(f"B-labelled primitive structure saved as {pdb_save_name} based on the template {all_files[0]}!")
@@ -303,23 +314,11 @@ def compare_structures(prot_root_path: Path, save_dir: Path, save_name: str) -> 
 
 def main():
 
-    save_dir = Path("../workdir/prot_batch_resuls")
-    paths_and_names = [
-        # ("../data_sources/pdb_files/h5/dummy", "h5_dummy"),
-        ("../data_sources/pdb_files/h5/277", "h5_277"),
-        ("../data_sources/pdb_files/h5/288", "h5_288"),
-        ("../data_sources/pdb_files/h5/299", "h5_299"),
-        ("../data_sources/pdb_files/h5/310", "h5_310"),
-        ("../data_sources/pdb_files/h5/321", "h5_321"),
-        # ("../data_sources/pdb_files/PED00075e000", "PED00075e000"),
-        # ("../data_sources/pdb_files/PED00072e000", "PED00072e000"),
-    ]
-
     rmsd_dmxs, lchd_dmxs, lchd_by_atom = list(), list(), list()
 
-    for prot_root_path, prot_name in paths_and_names:
+    for prot_root_path, prot_name in PATHS_AND_NAMES:
 
-        out_dict = compare_structures(Path(prot_root_path), save_dir, prot_name)
+        out_dict = compare_structures(Path(prot_root_path), prot_name)
         rmsd_dmxs.append(out_dict["rmsd_dmx"])
         lchd_dmxs.append(out_dict["lchd_dmx"])
         lchd_by_atom.append(out_dict["lchd_by_atom"])
@@ -328,7 +327,7 @@ def main():
     dmx_lchd_min = np.min(lchd_dmxs)
     dmx_lchd_max = np.max(lchd_dmxs)
 
-    for idx in range(len(paths_and_names)):
+    for idx in range(len(PATHS_AND_NAMES)):
 
         plot_result_input = {
             "rmsd_dmx": rmsd_dmxs[idx],
@@ -336,8 +335,7 @@ def main():
             "lchd_by_atom": lchd_by_atom[idx],
             "dmx_lchd_min": dmx_lchd_min,
             "dmx_lchd_max": dmx_lchd_max,
-            "save_dir": save_dir,
-            "save_name": paths_and_names[idx][1]
+            "save_name": PATHS_AND_NAMES[idx][1]
         }
 
         plot_result(plot_result_input)

@@ -1,8 +1,8 @@
 # Running the scripts in the `python_codes` directory
 
 The `python_codes` directory contains the scripts necessary to reproduce the experiments described in the article.
-These scripts will accept data from a `data_directory` one level above them (i.e. `../data_directory`) and
-will write the output files into a `workdir` directory, also one level above. These directories
+These scripts will accept data from a `data_sources` directory in the project root (i.e. `loco_hd/data_sources`) and
+will write the output files into a `workdir` directory, also in the project root. These directories
 should be __manually created__! Some scripts are going to need other manual directory creations too.
 Note, that most of these scripts are dependent on other Python3 libraries. The ones that output images
 will definitely require __Matplotlib__! All py files are "argument-less" runfiles, so running them only
@@ -142,8 +142,8 @@ This experiment consists of 2 parts:
    done by the script `casp14_predictor_test.py`.
 
 Download all files from https://predictioncenter.org/download_area/CASP14/targets/ and put them in
-`../data_sources/casp14`, i.e. to the path set by the `TARFILE_ROOT` variable in
-`casp14_predictor_extractor.py`. Here, also create the directory `../workdir/casp14`
+`loco_hd/data_sources/casp14`, i.e. to the path set by the `TARFILE_ROOT` variable in
+`casp14_predictor_extractor.py`. Here, also create the directory `loco_hd/workdir/casp14`
 (referenced by `TARGET_DIR`) if you haven't done it already. Set the `PREDICTOR_KEY` to the 
 contestant's CASP14 key you want to test. This script will output a single pickled file containing
 the BioPython parsed pdb structures in a dictionary.
@@ -151,7 +151,7 @@ the BioPython parsed pdb structures in a dictionary.
 This file will be read by `casp14_predictor_test.py`, so running the previous script is
 necessary for it to succeed. It will also use lDDT info containing tar files that can be
 downloaded from one of the links in Experiment 3. Download all of these files into 
-`../data_sources/casp14/lDDTs` (corresponding variable: `LDDT_TARS_PATH`).
+`loco_hd/data_sources/casp14/lDDTs` (corresponding variable: `LDDT_TARS_PATH`).
 To download all files from here, you can use:
 
 ```bash
@@ -184,17 +184,17 @@ This experiment consists of 3 parts:
 3. analyzing the raw data with `pisces_random_pairs_analyze.py`.
 
 First, go to https://dunbrack.fccc.edu/pisces/ and generate a pdb file list filtered according
-to your needs. Then, download the list, reference it in the `main` function of 
-`pisces_downloader.py` (also, don't forget to set the `pisces_dir` variable and create the
+to your needs. Then, download the list, reference it in the `PISCES_FILENAME` variable of 
+`pisces_downloader.py` (also, don't forget to set the `PISCES_DIR` variable and create the
 necessary directory), and run the script. It will download all pdb files mentioned in the PISCES
 list and normalize them.
 
 Next, use `pisces_random_pairs.py` to create random residue environments between proteins and
-calculate their corresponding LoCoHD values. Read through the variables in the beginning of the
-`main` function and set them according to your needs (their names are self-explanatory).
+calculate their corresponding LoCoHD values. Read through the capitalized variables in the beginning of the
+script and set them according to your needs (their names are self-explanatory).
 
 Lastly, use `pisces_random_pairs_analyze.py` to calculate the random environment pairing 
-statistics. Here, you only have to set the variables `data_source_dir` and `data_source_name`,
+statistics. Here, you only have to set the variables `DATA_SOURCE_DIR` and `DATA_SOURCE_NAME`,
 so that they aggree with the outputs of the previous script. (Right now, this script is a bit
 "overcomplicated", because it uses the Welford online algorithm to calculate the global average
 and variance.)
@@ -218,9 +218,9 @@ __Input files needed:__ all downloadable, see the description above
 
 ## Experiment 6: `compare_ensembles.py`
 
-Modify the `save_dir` and `paths_and_names` variables in `main` to your own needs.
-Create the `../workdir/prot_batch_resuls` directory.
-In `paths_and_names` you have to specify the source of the ensemble containing pdb file 
+Modify the `SAVE_DIR` and `PATH_AND_NAMES` variables to your own needs.
+Create the `loco_hd/workdir/prot_batch_resuls` directory.
+In `PATH_AND_NAMES` you have to specify the source of the ensemble containing pdb file 
 (first element of the tuple) and the tag or name of the protein that is represented by the ensemble 
 (second element of the tuple). These tuples are collected into a list and are run separately. 
 However, the coloring of the images outputted by this script (namely, the structure-structure comparison 
@@ -242,9 +242,9 @@ __Input files needed:__ all downloadable, see the article
 
 ## Experiment 7: `trajectory_analyzer.py`
 
-Again, in the `main` function modify the `source_dir` and `target_dir` variables.
-The `source_dir` directory should contain an xtc trajectory file and a tpr structure
-file of an MD simulation (see the variables `trajectory_path` and `structure_path`). Running
+Again, modify the `SOURCE_DIR` and `TARGET_DIR` variables.
+The `SOURCE_DIR` directory should contain an xtc trajectory file and a tpr structure
+file of an MD simulation (see the variables `TRAJECTORY_PATH` and `STRUCTURE_PATH`). Running
 this script will analyze the evolution of the LoCoHD scores of individual residues.
 It will output the following files:
 

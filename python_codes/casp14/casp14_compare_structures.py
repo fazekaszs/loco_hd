@@ -28,9 +28,9 @@ STRUCTURE_NAME = "T1064"
 PREDICTED_SUFFIX1 = "_1"
 PREDICTED_SUFFIX2 = "_5"
 
-LDDT_TARS_PATH = Path("../../data_sources/casp14/lDDTs")
+LDDT_TARS_PATH = Path("../data_sources/casp14/lDDTs")
 PDB_DIR_PATH = Path(f"../data_sources/casp14_{STRUCTURE_NAME}/pdbs")
-TARGET_PATH = Path("../../workdir/casp14")
+TARGET_PATH = Path("../workdir/casp14")
 RESI_IDX_SHIFT = 15
 MAX_LCHD = 0.4
 
@@ -131,7 +131,7 @@ def main():
     filter_atoms(protein_true, protein_pred2)
 
     # Create the PrimitiveAssigner instance
-    primitive_assigner = PrimitiveAssigner(Path("../../primitive_typings/all_atom_with_centroid.config.json"))
+    primitive_assigner = PrimitiveAssigner(Path("../primitive_typings/all_atom_with_centroid.config.json"))
 
     # Initialize LoCoHD instance
     weight_function = WeightFunction("uniform", [3, 10])

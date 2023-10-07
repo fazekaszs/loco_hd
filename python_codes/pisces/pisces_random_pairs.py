@@ -19,9 +19,9 @@ from loco_hd import LoCoHD, PrimitiveAtom, WeightFunction, PrimitiveAssigner, Pr
 
 CURRENT_TIME = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
 OUTPUT_FILENAME = "locohd_data.pisces"
-WORKDIR_TARGET = Path("../../workdir/pisces")
-ASSIGNER_CONFIG_PATH = Path("../../primitive_typings/coarse_grained_with_centroid.config.json")
-PISCES_DIR_PATH = Path("../../databases/pisces_220222")
+WORKDIR_TARGET = Path("../workdir/pisces")
+ASSIGNER_CONFIG_PATH = Path("../primitive_typings/coarse_grained_with_centroid.config.json")
+PISCES_DIR_PATH = Path("../../../PycharmProjects/databases/pisces_220222")
 RANDOM_SEED = 1994
 MAX_N_OF_ANCHORS = 1500
 WEIGHT_FUNCTION = ("uniform", [3, 10, ])
