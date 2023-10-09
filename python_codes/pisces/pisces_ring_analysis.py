@@ -2,23 +2,25 @@ import os
 import sys
 import subprocess as subp
 import pickle
+
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List, Tuple
 
 import numpy as np
 
 import tensorflow as tf
 import matplotlib.pyplot as plt
-from scipy.stats import pearsonr, spearmanr
+from matplotlib.patches import Rectangle
+from scipy.stats import spearmanr
 
 RING_FILE_PATH = Path("../ring-3.0.0/ring/bin/ring")
 PISCES_DIR_PATH = Path("../../PycharmProjects/databases/pisces_220222")
 OUTPUT_PATH = Path("../workdir/pisces/ring_result")
+PISCES_LOCOHD_FILE_PATH = Path("../workdir/pisces/run_2023-02-08-12-50-23/locohd_data.pisces")
+
 INTERACTIONS = [
     "HBOND", "VDW", "SSBOND", "IONIC", "PIPISTACK", "PICATION"
 ]
-OUT_FILE_NAME = "collected.pickle"
-PISCES_LOCOHD_FILE_PATH = Path("../workdir/pisces/run_2023-02-08-12-50-23/locohd_data.pisces")
 RESI_TLCS = [
     "GLY", "ALA", "VAL", "ILE", "LEU", "PHE",
     "SER", "THR", "TYR", "ASP", "GLU", "ASN",
@@ -27,7 +29,55 @@ RESI_TLCS = [
 ]
 
 
-def run_ring():
+class EnvironmentPairList:
+
+    def __init__(self, ring_data: Dict[str, np.ndarray], locohd_data: List[Tuple[str, str, float]]):
+
+        self.training_data = None  # cached training data
+
+        self.side1_ids = list()
+        self.side2_ids = list()
+        self.side1_interactions = list()
+        self.side2_interactions = list()
+        self.locohd_values = list()
+
+        for side1_id, side2_id, locohd_score in locohd_data:
+
+            side1_interaction = ring_data.get(side1_id, np.zeros(len(INTERACTIONS)))
+            side2_interaction = ring_data.get(side2_id, np.zeros(len(INTERACTIONS)))
+
+            self.side1_ids.append(side1_id)
+            self.side2_ids.append(side2_id)
+            self.side1_interactions.append(side1_interaction)
+            self.side2_interactions.append(side2_interaction)
+            self.locohd_values.append(locohd_score)
+
+    def __len__(self):
+        return len(self.locohd_values)
+
+    def get_training_data(self, forced=False):
+
+        if self.training_data is not None and not forced:
+            return self.training_data  # if cached data is available, return it
+
+        t_in1, t_in2 = list(), list()
+        for idx in range(len(self)):
+
+            side1_tlc_onehot = tlc_to_one_hot(self.side1_ids[idx][-3:])
+            side2_tlc_onehot = tlc_to_one_hot(self.side2_ids[idx][-3:])
+
+            # feature vec = residue one-hot + contacts
+            side1_feature_vec = np.concatenate([side1_tlc_onehot, self.side1_interactions[idx]])
+            side2_feature_vec = np.concatenate([side2_tlc_onehot, self.side2_interactions[idx]])
+
+            t_in1.append(side1_feature_vec)
+            t_in2.append(side2_feature_vec)
+
+        # two input tensors, one output tensor
+        return np.array(t_in1), np.array(t_in2), np.array(self.locohd_values)
+
+
+def run_ring() -> None:
     """
     Runs RING on every pdb file inside a (PISCES) dictionary.
     """
@@ -65,7 +115,7 @@ def run_ring():
         os.system(f"rm {str(OUTPUT_PATH.resolve() / file_name)}")
 
 
-def collect_ring_result():
+def process_ring_result() -> Dict[str, np.ndarray]:
     """
     Read the ringEdges files and collect the data from them. The output is a dictionary with residue
     specifying keys (pdb_id/chain_id/resi_id-resi_type) and interaction count vectors.
@@ -118,6 +168,33 @@ def collect_ring_result():
     return out
 
 
+def get_ring_data() -> Dict[str, np.ndarray]:
+    """
+    Calls the run_ring and process_ring_result functions if necessary, or loads the corresponding, already
+    saved ring datafile. Returns a dictionary with residue ids as keys and interaction count vectors as
+    values. For the key formats see the process_ring_result function documentation.
+
+    :return: The residue interaction count dictionary.
+    """
+
+    ring_out_filename = "collected.pickle"
+
+    if os.path.exists(OUTPUT_PATH / ring_out_filename):
+
+        print(f"{str(OUTPUT_PATH / ring_out_filename)} already exists! Using this file...")
+        with open(OUTPUT_PATH / ring_out_filename, "rb") as f:
+            ring_data: Dict[str, np.ndarray] = pickle.load(f)
+
+    else:
+
+        run_ring()
+        ring_data = process_ring_result()
+        with open(OUTPUT_PATH / ring_out_filename, "wb") as f:
+            pickle.dump(ring_data, f)
+
+    return ring_data
+
+
 def tlc_to_one_hot(tlc: str):
     """
     Converts the three-letter code of an amino acid to a one-hot encoding.
@@ -132,8 +209,9 @@ def tlc_to_one_hot(tlc: str):
     return out
 
 
-def data_for_training(ring_data: Dict[str, np.ndarray]):
+def merge_datasets(ring_data: Dict[str, np.ndarray]) -> EnvironmentPairList:
     """
+    Merge the LoCoHD dataset (resi1, resi2, lchd score) and the RING dataset (resi keys, contact count vectors).
     Creates the full dataset for the training of a neural network.
 
     :param ring_data:
@@ -141,23 +219,11 @@ def data_for_training(ring_data: Dict[str, np.ndarray]):
     """
 
     with open(PISCES_LOCOHD_FILE_PATH, "rb") as f:
-        locohd_data = pickle.load(f)
+        locohd_data: List[Tuple[str, str, float]] = pickle.load(f)
 
-    # Merge the LoCoHD dataset (resi1, resi2, lchd score)
-    # and the RING dataset (resi keys, contact count vectors):
-    merged_data = [
-        (*x, ring_data.get(x[0], np.zeros(len(INTERACTIONS))), ring_data.get(x[1], np.zeros(len(INTERACTIONS))))
-        for x in locohd_data
-    ]
+    merged_data = EnvironmentPairList(ring_data, locohd_data)
 
-    t_in1, t_in2, t_out = list(), list(), list()  # two input tensors, one output tensor
-    for x in merged_data:
-
-        t_in1.append(np.concatenate([tlc_to_one_hot(x[0][-3:]), x[3]]))  # residue1 one-hot + contacts
-        t_in2.append(np.concatenate([tlc_to_one_hot(x[1][-3:]), x[4]]))  # residue2 one-hot + contacts
-        t_out.append(x[2])  # LoCoHD value
-
-    return np.array(t_in1), np.array(t_in2), np.array(t_out)
+    return merged_data
 
 
 def create_ffnn():
@@ -168,28 +234,45 @@ def create_ffnn():
     :return: The neural network model.
     """
 
+    # Define layers
+
     l_in1 = tf.keras.layers.Input(shape=(26, ))
     l_in2 = tf.keras.layers.Input(shape=(26, ))
 
-    l_hidden = tf.keras.layers.Dense(128, activation="relu")
-    l_output = tf.keras.layers.Dense(16, activation="sigmoid")
+    l_siamese1 = tf.keras.layers.Dense(256, activation="relu")
+    l_siamese2 = tf.keras.layers.Dense(128, activation="relu")
+
     l_combiner = tf.keras.layers.Lambda(
-        lambda x: tf.sqrt(tf.reduce_mean((x[0] - x[1]) ** 2, axis=1) + 1E-10)
+        lambda x: (x[0] - x[1]) ** 2
     )
 
-    t_vec1 = l_hidden(l_in1)
-    t_vec1 = l_output(t_vec1)
+    l_ff = tf.keras.models.Sequential([
+        tf.keras.layers.Dense(128, activation="relu"),
+        tf.keras.layers.Dense(64, activation="relu"),
+        tf.keras.layers.Dense(1, activation="sigmoid"),
+        tf.keras.layers.Reshape(tuple())
+    ])
 
-    t_vec2 = l_hidden(l_in2)
-    t_vec2 = l_output(t_vec2)
+    # Define tensor paths
+
+    t_vec1 = l_siamese1(l_in1)
+    t_vec1 = l_siamese2(t_vec1)
+
+    t_vec2 = l_siamese1(l_in2)
+    t_vec2 = l_siamese2(t_vec2)
 
     t_combined = l_combiner([t_vec1, t_vec2])
+    t_combined = l_ff(t_combined)
+
+    # Define and compile model
 
     ffnn = tf.keras.Model(inputs=(l_in1, l_in2), outputs=t_combined)
 
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
-
-    ffnn.compile(optimizer=optimizer, loss="mse")
+    bce = tf.keras.losses.BinaryCrossentropy(name="bce")
+    mse = tf.keras.losses.MeanSquaredError(name="mse")
+    mae = tf.keras.losses.MeanAbsoluteError(name="mae")
+    ffnn.compile(optimizer=optimizer, loss=bce, metrics=[mse, mae])
 
     return ffnn
 
@@ -198,6 +281,7 @@ def test_interaction_dependence(feature_vecs: np.ndarray, ffnn: tf.keras.Model):
 
     out_matrix = list()
 
+    # loop over all residue types
     for idx, resname in enumerate(RESI_TLCS):
 
         resi_mask = feature_vecs[:, idx] == 1
@@ -208,6 +292,7 @@ def test_interaction_dependence(feature_vecs: np.ndarray, ffnn: tf.keras.Model):
         t_in1 = t_in1[np.newaxis, ...]  # add batch dim
 
         t_in2 = list()
+        # loop over all interactions
         for interaction_idx, flag in enumerate(interaction_mask):
 
             # leave out interactions that are not formed by the current residue
@@ -231,43 +316,109 @@ def test_interaction_dependence(feature_vecs: np.ndarray, ffnn: tf.keras.Model):
     return out_matrix
 
 
-def main():
+def plot_results(ffnn: tf.keras.models.Model, merged_dataset: EnvironmentPairList):
 
-    if os.path.exists(OUTPUT_PATH / OUT_FILE_NAME):
+    t_in1, t_in2, y_true = merged_dataset.get_training_data()
 
-        print(f"{str(OUTPUT_PATH / OUT_FILE_NAME)} already exists! Using this file...")
-        with open(OUTPUT_PATH / OUT_FILE_NAME, "rb") as f:
-            ring_data = pickle.load(f)
-
-    else:
-
-        run_ring()
-        ring_data = collect_ring_result()
-        with open(OUTPUT_PATH / "collected.pickle", "wb") as f:
-            pickle.dump(ring_data, f)
-
-    t_in1, t_in2, t_out = data_for_training(ring_data)
-
-    all_inputs = np.concatenate([t_in1, t_in2], axis=0)
-
-    ffnn = create_ffnn()
-    ffnn.summary()
-    ffnn.fit(x=[t_in1, t_in2], y=t_out, batch_size=64, epochs=3, validation_split=0.2)
-
-    interaction_dependence_mx = test_interaction_dependence(all_inputs, ffnn)
+    plt.rcParams.update({
+        "font.size": 18,
+        "savefig.bbox": "tight",
+        "savefig.dpi": 300
+    })
 
     y_pred = ffnn.predict_on_batch([t_in1, t_in2])
 
-    corr_p, corr_s = pearsonr(t_out, y_pred), spearmanr(t_out, y_pred)
+    corr_s = spearmanr(y_true, y_pred)
+    mean_abs_err = np.mean(np.abs(y_pred - y_true))
+    mean_squ_err = np.sqrt(np.mean((y_pred - y_true) ** 2))
 
-    print(f"Correlation:\nPearson = {corr_p}\nSpearman = {corr_s}")
+    print(f"SpR = {corr_s}")
 
-    fig, ax = plt.subplots(1, 2)
-    ax[0].hist2d(y_pred, t_out, bins=100, cmap="hot")
+    # Get the residue dependence of error
 
-    ax[1].imshow(interaction_dependence_mx, cmap="autumn")
-    ax[1].set_xticks(np.arange(len(INTERACTIONS)), labels=INTERACTIONS, rotation=90)
-    ax[1].set_yticks(np.arange(len(RESI_TLCS)), labels=RESI_TLCS)
+    fig, ax = plt.subplots()
+    fig.suptitle("Prediction error dependence for different residue pairs")
+    fig.set_size_inches(10, 10)
+
+    error_dict = dict()
+    for idx, current_error in enumerate(np.abs(y_pred - y_true)):
+
+        resi1 = merged_dataset.side1_ids[idx][-3:]
+        resi2 = merged_dataset.side2_ids[idx][-3:]
+
+        current_key = (resi1, resi2) if resi1 > resi2 else (resi2, resi1)
+        error_list = error_dict.get(current_key, list())
+        error_list.append(current_error)
+        error_dict[current_key] = error_list
+
+    error_dict = {key: np.mean(errors) for key, errors in error_dict.items()}
+
+    error_mx = np.zeros((len(RESI_TLCS), len(RESI_TLCS)))
+    for key, current_error in error_dict.items():
+
+        resi1_idx = RESI_TLCS.index(key[0])
+        resi2_idx = RESI_TLCS.index(key[1])
+        error_mx[resi1_idx, resi2_idx] = error_mx[resi2_idx, resi1_idx] = current_error
+
+        ax.text(resi1_idx, resi2_idx, f"{current_error:.1%}", ha="center", va="center", color="black", fontsize=8)
+
+        if resi1_idx == resi2_idx:  # don't place text in the diagonals 2 times
+            continue
+
+        ax.text(resi2_idx, resi1_idx, f"{current_error:.1%}", ha="center", va="center", color="black", fontsize=8)
+
+    ax.imshow(error_mx, cmap="autumn")
+    ax.set_xticks(np.arange(len(RESI_TLCS)), labels=RESI_TLCS, rotation=90)
+    ax.set_yticks(np.arange(len(RESI_TLCS)), labels=RESI_TLCS)
+
+    plt.savefig(OUTPUT_PATH / "prediction_resi_dependence.png")
+    plt.close(fig)
+
+    # Set 2D histogram
+
+    fig, ax = plt.subplots()
+    fig.suptitle("2D histogram of the true and neural network\npredicted LoCoHD scores")
+    fig.set_size_inches(10, 10)
+    hist, x_tick_labels, y_tick_labels = np.histogram2d(
+        y_true, y_pred,
+        bins=100
+    )
+
+    ax.imshow(hist[:, ::-1].T, cmap="hot")
+    ax.set_xlabel("true LoCoHD score")
+    ax.set_ylabel("predicted LoCoHD score")
+
+    x_tick_labels, y_tick_labels = x_tick_labels[::15], y_tick_labels[::15]  # keep only 100 / 15 ~ 7 ticks
+    tick_posi = list(range(0, 100, 15))
+    ax.set_xticks(tick_posi, labels=[f"{x:.1%}" for x in x_tick_labels])
+    ax.set_yticks(tick_posi, labels=[f"{y:.1%}" for y in y_tick_labels[::-1]])
+
+    legend_labels = list()
+    legend_labels.append(f"SpR = {corr_s.statistic:.5f}")
+    legend_labels.append(f"MAE = {mean_abs_err:.3%}")
+    legend_labels.append(f"RMSE = {mean_squ_err:.3%}")
+    legend_handles = [Rectangle((0, 0), 1, 1, fc="white", ec="white", lw=0, alpha=0), ] * len(legend_labels)
+    ax.legend(
+        legend_handles, legend_labels,
+        loc="upper right", fancybox=True,
+        framealpha=0.7, handlelength=0, handletextpad=0
+    )
+
+    plt.savefig(OUTPUT_PATH / "histogram.png")
+    plt.close(fig)
+
+    # Set residue-interaction matrix
+
+    fig, ax = plt.subplots()
+    fig.set_size_inches(10, 10)
+    fig.suptitle("Expected LoCoHD value between interaction-less\nand single interaction environments")
+
+    all_inputs = np.concatenate([t_in1, t_in2], axis=0)
+    interaction_dependence_mx = test_interaction_dependence(all_inputs, ffnn)
+
+    ax.imshow(interaction_dependence_mx, cmap="autumn")
+    ax.set_xticks(np.arange(len(INTERACTIONS)), labels=INTERACTIONS, rotation=90)
+    ax.set_yticks(np.arange(len(RESI_TLCS)), labels=RESI_TLCS)
 
     for x_idx in range(len(RESI_TLCS)):
         for y_idx in range(len(INTERACTIONS)):
@@ -276,11 +427,26 @@ def main():
             if np.isnan(current_value):
                 continue
 
-            ax[1].text(y_idx, x_idx, f"{current_value:.1%}", ha="center", va="center", color="black")
+            ax.text(y_idx, x_idx, f"{current_value:.1%}", ha="center", va="center", color="black")
 
-    ax[1].set_aspect(len(INTERACTIONS) / len(RESI_TLCS))
+    ax.set_aspect(len(INTERACTIONS) / len(RESI_TLCS))
 
-    plt.show()
+    plt.savefig(OUTPUT_PATH / "resi_interaction_mx.png")
+
+
+def main():
+
+    ring_data = get_ring_data()
+    merged_dataset = merge_datasets(ring_data)
+    t_in1, t_in2, y_true = merged_dataset.get_training_data()
+
+    # np.random.shuffle(y_true)
+
+    ffnn = create_ffnn()
+    ffnn.summary()
+    ffnn.fit(x=[t_in1, t_in2], y=y_true, batch_size=64, epochs=3, validation_split=0.2)
+
+    plot_results(ffnn, merged_dataset)
 
 
 if __name__ == "__main__":

@@ -142,7 +142,7 @@ def plot_result(in_dict: Dict[str, Any]):
     tril_idxs = np.tril_indices(len(rmsd_dmx), k=-1)
     tril_lhcd_dmx = lchd_dmx[tril_idxs]
     tril_rmsd_dmx = rmsd_dmx[tril_idxs]
-    ax.scatter(tril_lhcd_dmx, tril_rmsd_dmx)
+    ax.scatter(tril_lhcd_dmx, tril_rmsd_dmx, marker=".", alpha=0.3, color="blue", linewidth=0)
     ax.set_xlabel("LoCoHD score")
     ax.set_ylabel("RMSD / $\\AA$")
 
