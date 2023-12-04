@@ -46,7 +46,7 @@ def filter_atoms(ref_structure: Entity, structure: Entity):
     for child_key in list(structure.child_dict.keys()):
         if child_key not in ref_structure.child_dict:
             structure.detach_child(child_key)
-        elif type(structure.child_dict[child_key]) != Atom:
+        elif type(structure.child_dict[child_key]) is Atom:
             filter_atoms(ref_structure.child_dict[child_key], structure.child_dict[child_key])
 
 
