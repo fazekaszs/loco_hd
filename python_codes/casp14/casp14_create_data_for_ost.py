@@ -1,4 +1,4 @@
-# Convert the pickled file saved from casp14_predictor_extractor.py into a
+# Convert the pickled file saved from casp14_tarfile_structure_extractor.py into a
 # nested dictionary of PDB strings. The two-level nested dictionary has keys
 # of 1. structure id (in CASP format) and 2. "true"/"1"/"2"... (a predictor_key).
 

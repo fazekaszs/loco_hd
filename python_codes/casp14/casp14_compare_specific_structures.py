@@ -9,7 +9,7 @@ from Bio.PDB.Atom import Atom
 from Bio.PDB.PDBIO import PDBIO
 from pathlib import Path
 from loco_hd import LoCoHD, PrimitiveAtom, PrimitiveAssigner, PrimitiveAtomTemplate, WeightFunction, TagPairingRule
-from casp14_predictor_extractor import filter_atoms
+from casp14_tarfile_structure_extractor import filter_atoms
 
 # Examined structures:
 # - AF2:
