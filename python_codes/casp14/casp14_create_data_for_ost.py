@@ -15,7 +15,6 @@ from Bio.PDB.PDBIO import PDBIO
 # AF2: TS427, BAKER: TS473, BAKER-experimental: TS403, FEIG-R2: TS480, Zhang: TS129
 PREDICTOR_KEY = "TS427"
 SOURCE_DIR = Path(f"../workdir/casp14/{PREDICTOR_KEY}_results")
-TARGET_DIR = Path(f"../workdir/casp14/for_openstructure/{PREDICTOR_KEY}_results")
 
 
 class FakeFileHandler:
@@ -34,7 +33,7 @@ def main():
 
     pdb_io = PDBIO()
 
-    structure_collection_path = SOURCE_DIR / f"{PREDICTOR_KEY}_structures.pickle"
+    structure_collection_path = SOURCE_DIR / f"{PREDICTOR_KEY}_biopython_structures.pickle"
     with open(structure_collection_path, "rb") as f:
         structure_collection: Dict[str, Dict[str, Structure]] = pickle.load(f)
 
@@ -58,10 +57,7 @@ def main():
             out[structure_id][predictor_key] = ffh.content
             print(f"Structure {structure_id}_{predictor_key} done!")
 
-    if not os.path.exists(TARGET_DIR):
-        os.mkdir(TARGET_DIR)
-
-    str_collection_path = TARGET_DIR / f"{PREDICTOR_KEY}_strs.pickle"
+    str_collection_path = SOURCE_DIR / f"{PREDICTOR_KEY}_string_structures.pickle"
     with open(str_collection_path, "wb") as f:
         pickle.dump(out, f)
 

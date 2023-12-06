@@ -17,7 +17,7 @@ from ost.mol.alg import scoring
 
 def main():
 
-    with open("/data/TS427_strs.pickle", "rb") as f:
+    with open("/data/TS427_string_structures.pickle", "rb") as f:
         str_collection = pickle.load(f)
 
     # A highly nested dict:

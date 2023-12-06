@@ -130,7 +130,7 @@ def main():
     if not os.path.exists(predictor_target_dir):
         os.mkdir(predictor_target_dir)
 
-    predictor_target_file = predictor_target_dir / f"{PREDICTOR_KEY}_structures.pickle"
+    predictor_target_file = predictor_target_dir / f"{PREDICTOR_KEY}_biopython_structures.pickle"
     with open(predictor_target_file, "wb") as f:
         pickle.dump(all_structures, f)
 

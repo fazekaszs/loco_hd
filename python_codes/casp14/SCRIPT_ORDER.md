@@ -22,7 +22,8 @@
  The value is the corresponding score.
  This script can only be run in the __OpenStructure docker 
  container__!
-4. ...
+4. `casp14_extend_with_locohd.py`
+5. `casp14_plotting.py`
 
 ## Standalones
 
