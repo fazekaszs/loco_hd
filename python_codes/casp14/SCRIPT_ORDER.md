@@ -24,6 +24,7 @@
  container__!
 4. `casp14_extend_with_locohd.py`
 5. `casp14_plotting.py`
+6. `casp14_statistics.py`
 
 ## Standalones
 
