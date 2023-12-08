@@ -60,6 +60,7 @@ class Statistics:
             np.median(all_scores, axis=1)
         )
 
+        # Calculating the per-residue correlation matrix between different score types.
         self.correlation_mxs.append(
             spearmanr(all_scores, axis=1).statistic
         )
@@ -75,23 +76,24 @@ class Statistics:
 
             current_group = all_groups.get(
                 structure_name,
-                {"numbers": list(), "median": list(), "corr_mx": list()}
+                {"numbers": list(), "median": list(), "corrmx": list()}
             )
 
             current_group["numbers"].append(structure_number)
             current_group["median"].append(median_score)
-            current_group["corr_mx"].append(correlation_mx)
+            current_group["corrmx"].append(correlation_mx)
 
             all_groups[structure_name] = current_group
 
         # Calculate gaps within the groups.
         for structure_name in all_groups:
 
-            group_numbers = np.array(all_groups[structure_name]["numbers"])
+            # Convert lists of strs and lists of ndarrays into ndarrays.
+            group_numbers = np.array(all_groups[structure_name]["numbers"])  # N strings
+            group_medians = np.array(all_groups[structure_name]["median"])  # (N, M) for the M scores
+            group_corr_mxs = np.array(all_groups[structure_name]["corrmx"])  # (N, M, M), corr. between scores
 
             # First, deal with the per-residue median scores.
-            group_medians = np.array(all_groups[structure_name]["median"])
-
             group_max_median_idxs = np.argmax(group_medians, axis=0)
             group_min_median_idxs = np.argmin(group_medians, axis=0)
 
@@ -103,21 +105,79 @@ class Statistics:
             group_max_median_numbers = group_numbers[group_max_median_idxs]
             group_min_median_numbers = group_numbers[group_min_median_idxs]
 
-            group_median_gap_data = [
-                (gap, num1, num2)
-                for gap, num1, num2 in
-                zip(group_median_score_gaps, group_max_median_numbers, group_min_median_numbers)
-            ]
+            # Collect the largest score median gaps and the corresponding structure numbers.
+            group_median_gap_data = {
+                sn: (num1, num2, gap)
+                for sn, num1, num2, gap in
+                zip(
+                    self.score_names,
+                    group_max_median_numbers,
+                    group_min_median_numbers,
+                    group_median_score_gaps,
+                )
+            }
+            all_groups[structure_name]["median_gaps"] = group_median_gap_data
 
-            # Next, deal with the correlation matrices
-            group_corr_mxs = np.array(all_groups[structure_name]["corr_mx"])
+            # Next, deal with the per-residue score correlation matrices.
+            triu_ax1, triu_ax2 = np.triu_indices(group_corr_mxs.shape[1], k=1)
 
-            for idx1, sn1 in enumerate(self.score_names):
-                for idx2, sn2 in enumerate(self.score_names[idx1 + 1:]):
-                    idx2 += idx1 + 1
-                    group_max_corr_idx = np.argmax(group_corr_mxs[:, idx1, idx2])
-                    group_min_corr_idx = np.argmin(group_corr_mxs[:, idx1, idx2])
-                    # TODO: continue here!
+            group_max_corr_idx = np.argmax(group_corr_mxs, axis=0)[triu_ax1, triu_ax2]
+            group_min_corr_idx = np.argmin(group_corr_mxs, axis=0)[triu_ax1, triu_ax2]
+
+            group_max_corr_values = group_corr_mxs[group_max_corr_idx, triu_ax1, triu_ax2]
+            group_min_corr_values = group_corr_mxs[group_min_corr_idx, triu_ax1, triu_ax2]
+            group_corr_value_gaps = group_max_corr_values - group_min_corr_values
+
+            group_max_corr_numbers = group_numbers[group_max_corr_idx]
+            group_min_corr_numbers = group_numbers[group_min_corr_idx]
+
+            # Collect the largest score correlation gaps and the corresponding structure numbers.
+            group_corr_gap_data = {
+                frozenset({sn1, sn2}): (num1, num2, gap)
+                for sn1, sn2, num1, num2, gap in
+                zip(
+                    self.score_names[triu_ax1],
+                    self.score_names[triu_ax2],
+                    group_max_corr_numbers,
+                    group_min_corr_numbers,
+                    group_corr_value_gaps,
+                )
+            }
+            all_groups[structure_name]["corrmx_gaps"] = group_corr_gap_data
+
+            # Delete redundant data
+            del all_groups[structure_name]["numbers"]
+            del all_groups[structure_name]["median"]
+            del all_groups[structure_name]["corrmx"]
+
+        # Extract the maximum gap cases
+        max_gaps = {
+            "median_gaps": dict(), "corrmx_gaps": dict()
+        }
+        for structure_name in all_groups:
+
+            # Again, deal with the score median gaps first.
+            for score_name, gap_info in all_groups[structure_name]["median_gaps"].items():
+
+                current_max = max_gaps["median_gaps"].get(
+                    score_name,
+                    ("", "", "", float("-inf"))
+                )
+
+                if gap_info[-1] > current_max[-1]:
+                    max_gaps["median_gaps"][score_name] = (structure_name, *gap_info)
+
+            for score_pair_key, gap_info in all_groups[structure_name]["corrmx_gaps"].items():
+
+                current_max = max_gaps["corrmx_gaps"].get(
+                    score_pair_key,
+                    ("", "", "", float("-inf"))
+                )
+
+                if gap_info[-1] > current_max[-1]:
+                    max_gaps["corrmx_gaps"][score_pair_key] = (structure_name, *gap_info)
+
+        return max_gaps
 
     def summary(self):
 
@@ -137,9 +197,13 @@ class Statistics:
             "StDev": np.std(self.correlation_mxs, axis=0),
         }
 
+        gaps = self.calculate_gaps()
+
         return {
+            "score_names": self.score_names,
             "median_summary": meadian_summary,
-            "correlation_mx_summary": correlation_mx_summary
+            "correlation_mx_summary": correlation_mx_summary,
+            **gaps
         }
 
 
@@ -161,8 +225,10 @@ def main():
                 current_scores["per_residue"]
             )
 
-    stats.calculate_gaps()
     summary = stats.summary()
+
+    with open(WORKDIR / f"{PREDICTOR_KEY}_statistics.pickle", "wb") as f:
+        pickle.dump(summary, f)
 
 
 if __name__ == "__main__":
