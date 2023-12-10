@@ -3,7 +3,6 @@
 # of 1. structure id (in CASP format) and 2. "true"/"1"/"2"... (a predictor_key).
 
 import pickle
-import os
 
 from pathlib import Path
 from typing import Dict
@@ -13,8 +12,8 @@ from Bio.PDB.PDBIO import PDBIO
 
 # Set the necessary constants. The available predictor keys are the following:
 # AF2: TS427, BAKER: TS473, BAKER-experimental: TS403, FEIG-R2: TS480, Zhang: TS129
-PREDICTOR_KEY = "TS427"
-SOURCE_DIR = Path(f"../workdir/casp14/{PREDICTOR_KEY}_results")
+PREDICTOR_KEY = "TS129"
+SOURCE_DIR = Path(f"../../workdir/casp14/{PREDICTOR_KEY}_results")
 
 
 class FakeFileHandler:

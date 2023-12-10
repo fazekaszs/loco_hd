@@ -7,7 +7,9 @@ from Bio.PDB.Structure import Structure
 
 from loco_hd import LoCoHD, PrimitiveAtom, WeightFunction, PrimitiveAssigner, PrimitiveAtomTemplate, TagPairingRule
 
-PREDICTOR_KEY = "TS427"
+# Set the necessary constants. The available predictor keys are the following:
+# AF2: TS427, BAKER: TS473, BAKER-experimental: TS403, FEIG-R2: TS480, Zhang: TS129
+PREDICTOR_KEY = "TS129"
 WORKDIR = Path(f"../../workdir/casp14/{PREDICTOR_KEY}_results/")
 
 

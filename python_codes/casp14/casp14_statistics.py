@@ -5,7 +5,9 @@ from pathlib import Path
 import numpy as np
 from scipy.stats import spearmanr
 
-PREDICTOR_KEY = "TS427"
+# Set the necessary constants. The available predictor keys are the following:
+# AF2: TS427, BAKER: TS473, BAKER-experimental: TS403, FEIG-R2: TS480, Zhang: TS129
+PREDICTOR_KEY = "TS129"
 WORKDIR = Path(f"../../workdir/casp14/{PREDICTOR_KEY}_results/")
 
 

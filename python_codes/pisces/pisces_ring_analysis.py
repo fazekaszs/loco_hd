@@ -14,9 +14,9 @@ from matplotlib.patches import Rectangle
 from scipy.stats import spearmanr
 
 RING_FILE_PATH = Path("../ring-3.0.0/ring/bin/ring")
-PISCES_DIR_PATH = Path("../../PycharmProjects/databases/pisces_220222")
-OUTPUT_PATH = Path("../workdir/pisces/ring_result")
-PISCES_LOCOHD_FILE_PATH = Path("../workdir/pisces/run_2023-02-08-12-50-23/locohd_data.pisces")
+PISCES_DIR_PATH = Path("../../../../PycharmProjects/databases/pisces_220222")
+OUTPUT_PATH = Path("../../workdir/pisces/ring_result")
+PISCES_LOCOHD_FILE_PATH = Path("../../workdir/pisces/run_2023-02-08-12-50-23/locohd_data.pisces")
 
 INTERACTIONS = [
     "HBOND", "VDW", "SSBOND", "IONIC", "PIPISTACK", "PICATION"
@@ -27,6 +27,7 @@ RESI_TLCS = [
     "GLN", "TRP", "HIS", "MET", "PRO", "CYS",
     "ARG", "LYS"
 ]
+MM_TO_INCH = 0.0393701
 
 
 class EnvironmentPairList:
@@ -321,9 +322,10 @@ def plot_results(ffnn: tf.keras.models.Model, merged_dataset: EnvironmentPairLis
     t_in1, t_in2, y_true = merged_dataset.get_training_data()
 
     plt.rcParams.update({
-        "font.size": 18,
-        "savefig.bbox": "tight",
-        "savefig.dpi": 300
+        "font.size": 7,
+        "font.family": "Arial",
+        "figure.subplot.left": 0.2,
+        "figure.subplot.bottom": 0.15
     })
 
     y_pred = ffnn.predict_on_batch([t_in1, t_in2])
@@ -338,7 +340,7 @@ def plot_results(ffnn: tf.keras.models.Model, merged_dataset: EnvironmentPairLis
 
     fig, ax = plt.subplots()
     fig.suptitle("Prediction error dependence for different residue pairs")
-    fig.set_size_inches(10, 10)
+    fig.set_size_inches(88 * MM_TO_INCH, 88 * MM_TO_INCH)
 
     error_dict = dict()
     for idx, current_error in enumerate(np.abs(y_pred - y_true)):
@@ -371,14 +373,14 @@ def plot_results(ffnn: tf.keras.models.Model, merged_dataset: EnvironmentPairLis
     ax.set_xticks(np.arange(len(RESI_TLCS)), labels=RESI_TLCS, rotation=90)
     ax.set_yticks(np.arange(len(RESI_TLCS)), labels=RESI_TLCS)
 
-    plt.savefig(OUTPUT_PATH / "prediction_resi_dependence.png")
+    plt.savefig(OUTPUT_PATH / "prediction_resi_dependence.svg")
     plt.close(fig)
 
     # Set 2D histogram
 
     fig, ax = plt.subplots()
     fig.suptitle("2D histogram of the true and neural network\npredicted LoCoHD scores")
-    fig.set_size_inches(10, 10)
+    fig.set_size_inches(88 * MM_TO_INCH, 88 * MM_TO_INCH)
     hist, x_tick_labels, y_tick_labels = np.histogram2d(
         y_true, y_pred,
         bins=100
@@ -404,13 +406,13 @@ def plot_results(ffnn: tf.keras.models.Model, merged_dataset: EnvironmentPairLis
         framealpha=0.7, handlelength=0, handletextpad=0
     )
 
-    plt.savefig(OUTPUT_PATH / "histogram.png")
+    plt.savefig(OUTPUT_PATH / "histogram.svg")
     plt.close(fig)
 
     # Set residue-interaction matrix
 
     fig, ax = plt.subplots()
-    fig.set_size_inches(10, 10)
+    fig.set_size_inches(88 * MM_TO_INCH, 88 * MM_TO_INCH)
     fig.suptitle("Expected LoCoHD value between interaction-less\nand single interaction environments")
 
     all_inputs = np.concatenate([t_in1, t_in2], axis=0)
@@ -431,7 +433,7 @@ def plot_results(ffnn: tf.keras.models.Model, merged_dataset: EnvironmentPairLis
 
     ax.set_aspect(len(INTERACTIONS) / len(RESI_TLCS))
 
-    plt.savefig(OUTPUT_PATH / "resi_interaction_mx.png")
+    plt.savefig(OUTPUT_PATH / "resi_interaction_mx.svg")
 
 
 def main():

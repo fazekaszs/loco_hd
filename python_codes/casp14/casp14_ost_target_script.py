@@ -14,10 +14,14 @@ import pickle
 from ost.io import PDBStrToEntity
 from ost.mol.alg import scoring
 
+# Set the necessary constants. The available predictor keys are the following:
+# AF2: TS427, BAKER: TS473, BAKER-experimental: TS403, FEIG-R2: TS480, Zhang: TS129
+PREDICTOR_KEY = "TS129"
+
 
 def main():
 
-    with open("/data/TS427_string_structures.pickle", "rb") as f:
+    with open(f"/data/{PREDICTOR_KEY}_string_structures.pickle", "rb") as f:
         str_collection = pickle.load(f)
 
     # A highly nested dict:
@@ -69,7 +73,7 @@ def main():
                 "per_residue": per_residue_measurements
             }
 
-            with open("/data/TS427_ost_results.pickle", "wb") as f:
+            with open(f"/data/{PREDICTOR_KEY}_ost_results.pickle", "wb") as f:
                 pickle.dump(measurement_collection, f)
 
 

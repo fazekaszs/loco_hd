@@ -15,7 +15,7 @@ from Bio.PDB.Atom import Atom
 
 # Set the necessary constants. The available predictor keys are the following:
 # AF2: TS427, BAKER: TS473, BAKER-experimental: TS403, FEIG-R2: TS480, Zhang: TS129
-PREDICTOR_KEY = "TS427"
+PREDICTOR_KEY = "TS129"
 TARFILE_ROOT = Path("../../data_sources/casp14")
 TARGET_DIR = Path("../../workdir/casp14")
 
@@ -46,7 +46,7 @@ def filter_atoms(ref_structure: Entity, structure: Entity):
     for child_key in list(structure.child_dict.keys()):
         if child_key not in ref_structure.child_dict:
             structure.detach_child(child_key)
-        elif type(structure.child_dict[child_key]) is Atom:
+        elif type(structure.child_dict[child_key]) is not Atom:
             filter_atoms(ref_structure.child_dict[child_key], structure.child_dict[child_key])
 
 
@@ -112,6 +112,10 @@ def main():
                 n_of_atoms_true = len(list(all_structures[member_name]["true"].get_atoms()))
 
                 if n_of_atoms != n_of_atoms_true:
+                    print(
+                        f"Atom number mismatch with structure {member_name}_{member_id}: "
+                        f"{n_of_atoms} vs. {n_of_atoms_true}! Skipping..."
+                    )
                     f.close()
                     continue
 
@@ -125,6 +129,8 @@ def main():
                 f.close()
 
     all_structures = {key: value for key, value in all_structures.items() if len(value) > 1}
+
+    print(f"Number of structures to be saved: {len(all_structures)}")
 
     predictor_target_dir = TARGET_DIR / f"{PREDICTOR_KEY}_results"
     if not os.path.exists(predictor_target_dir):
