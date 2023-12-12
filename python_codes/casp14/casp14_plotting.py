@@ -55,7 +55,7 @@ class Histogram:
         ax.set_xlabel(f"{score1_name} score")
         ax.set_ylabel(f"{score2_name} score")
 
-        fig.savefig(WORKDIR / "plots" / f"{plot_save_name}.svg")
+        fig.savefig(WORKDIR / "plots" / f"{plot_save_name}.svg", dpi=300)
         plt.close(fig)
 
 
@@ -130,7 +130,7 @@ def create_plot(
         framealpha=0.7, handlelength=0, handletextpad=0
     )
 
-    fig.savefig(WORKDIR / "plots" / f"{plot_save_name}.svg")
+    fig.savefig(WORKDIR / "plots" / f"{plot_save_name}.svg", dpi=300)
 
     plt.close(fig)
 

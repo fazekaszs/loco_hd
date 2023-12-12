@@ -373,7 +373,7 @@ def plot_results(ffnn: tf.keras.models.Model, merged_dataset: EnvironmentPairLis
     ax.set_xticks(np.arange(len(RESI_TLCS)), labels=RESI_TLCS, rotation=90)
     ax.set_yticks(np.arange(len(RESI_TLCS)), labels=RESI_TLCS)
 
-    plt.savefig(OUTPUT_PATH / "prediction_resi_dependence.svg")
+    plt.savefig(OUTPUT_PATH / "prediction_resi_dependence.svg", dpi=300)
     plt.close(fig)
 
     # Set 2D histogram
@@ -406,7 +406,7 @@ def plot_results(ffnn: tf.keras.models.Model, merged_dataset: EnvironmentPairLis
         framealpha=0.7, handlelength=0, handletextpad=0
     )
 
-    plt.savefig(OUTPUT_PATH / "histogram.svg")
+    plt.savefig(OUTPUT_PATH / "histogram.svg", dpi=300)
     plt.close(fig)
 
     # Set residue-interaction matrix
@@ -433,7 +433,7 @@ def plot_results(ffnn: tf.keras.models.Model, merged_dataset: EnvironmentPairLis
 
     ax.set_aspect(len(INTERACTIONS) / len(RESI_TLCS))
 
-    plt.savefig(OUTPUT_PATH / "resi_interaction_mx.svg")
+    plt.savefig(OUTPUT_PATH / "resi_interaction_mx.svg", dpi=300)
 
 
 def main():

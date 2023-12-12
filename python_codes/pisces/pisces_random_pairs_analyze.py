@@ -48,6 +48,7 @@ RESI_PROPERTIES = {
 }
 DATA_SOURCE_DIR = Path("../../workdir/pisces")
 DATA_SOURCE_NAME = "run_2023-02-08-12-50-23"
+MM_TO_INCH = 0.0393701
 
 
 class AdvancedWelfordStatistics:
@@ -323,19 +324,53 @@ def main():
 
     # Plotting the full distribution histogram, along with the fitted beta distribution PDF.
     print("Beta-distribution fitted and saved! Starting to plot...")
+
+    plt.rcParams["font.size"] = 7
+    plt.rcParams["font.family"] = "Arial"
+    plt.rcParams["figure.subplot.left"] = 0.2
+    plt.rcParams["figure.subplot.bottom"] = 0.15
+
     fig, ax = plt.subplots()
 
-    ax.hist(lchd_scores, bins=100, density=True, label="experimental distribution")
-    plot_range = np.arange(0, 1 + 0.01, 0.01)
-    ax.plot(plot_range, beta_dist.pdf(plot_range, *beta_params),
-            alpha=0.7,
-            label="fitted $\\beta$-distribution")
-    ax.legend(loc="upper right", shadow=True)
+    ax.hist(
+        lchd_scores,
+        bins=100, density=True, label="experimental distribution"
+    )
+
+    plot_x = np.arange(0, 1 + 0.01, 0.01)
+    fitted_beta_y = beta_dist.pdf(plot_x, *beta_params)
+    fitted_beta_height = np.max(fitted_beta_y)
+    plot_y_ticks = np.arange(0, fitted_beta_height * 2, fitted_beta_height * 2 / 10)
+
+    ax.plot(
+        plot_x, fitted_beta_y,
+        alpha=0.7, label="fitted $\\beta$-distribution"
+    )
+    box_dict = ax.boxplot(
+        lchd_scores,
+        positions=[fitted_beta_height * 1.3, ],
+        widths=[fitted_beta_height * 0.1, ],
+        vert=False, showfliers=False, manage_ticks=False
+    )
+
+    box_dict["medians"][0].set_color("blue")
+    median_line_top = box_dict["medians"][0].get_xydata()[1, :]
+    ax.text(
+        median_line_top[0], median_line_top[1],
+        f"median: {median_line_top[0]:.2%}",
+        ha="center", va="bottom",
+    )
+
+    ax.legend(loc="upper right")
     ax.set_xlabel("LoCoHD score")
     ax.set_ylabel("Density")
+
     x_ticks = np.arange(0, 1 + 0.2, 0.2)
     ax.set_xticks(x_ticks, [f"{x:.0%}" for x in x_ticks])
-    fig.savefig(analysis_dir_path / "distribution.png", dpi=300)
+    ax.set_yticks(plot_y_ticks)
+
+    fig.set_size_inches(88 * MM_TO_INCH, 88 * MM_TO_INCH)
+    fig.savefig(analysis_dir_path / "distribution.svg", dpi=300)
 
 
 if __name__ == "__main__":
