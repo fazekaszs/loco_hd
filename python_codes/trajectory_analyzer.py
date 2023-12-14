@@ -28,6 +28,7 @@ TARGET_DIR = Path("../workdir/trajectory_analysis/podocin_dimer")
 TRAJECTORY_PATH = SOURCE_DIR / "podocin_wt_dimer_mcc_dt100.xtc"
 STRUCTURE_PATH = SOURCE_DIR / "podocin_wt_dimer_onlyProt.tpr"
 PRIMITIVE_TYPING_SCHEME_PATH = Path("../primitive_typings/coarse_grained_with_centroid.config.json")
+MM_TO_INCH = 0.0393701
 
 
 class MDPrimitiveAssigner(PrimitiveAssigner):
@@ -160,7 +161,7 @@ def plot_time_dependencies(
     print("Plotting LoCoHD score time dependencies!")
 
     fig, ax = plt.subplots()
-    plt.tight_layout()
+    fig.set_size_inches(88 * MM_TO_INCH, 88 * MM_TO_INCH)
 
     max_lchd = np.max(all_points)
     y_axis_ticks = np.arange(0, max_lchd, max_lchd / 10)
@@ -190,7 +191,7 @@ def plot_time_dependencies(
 
         legend_labels = list()
         legend_labels.append(f"Mean score: {mean_lchd_score:.1%}")
-        legend_labels.append(f"StD of the score: {std_lchd_score:.1%}")
+        legend_labels.append(f"StDev of the score: {std_lchd_score:.1%}")
         legend_labels.append(f"Median score: {median_lchd_score:.1%} at time: {median_lchd_time:.0f} ps")
         legend_labels.append(f"Max score: {max_lchd_score:.1%} at time: {max_lchd_time:.0f} ps")
 
@@ -206,7 +207,7 @@ def plot_time_dependencies(
         ax.set_title(plot_title)
         ax.set_yticks(y_axis_ticks, labels=[f"{tick:.1%}" for tick in y_axis_ticks])
         ax.set_ylim(0, max_lchd)
-        fig.savefig(str(TARGET_DIR / f"{plot_title}.png"), dpi=200, bbox_inches="tight")
+        fig.savefig(str(TARGET_DIR / f"{plot_title}.svg"), dpi=300)
 
     # Plotting of the mean (along residues) LoCoHD value's time dependency
     mean_lchd_t = np.mean(all_points, axis=1)
@@ -227,7 +228,7 @@ def plot_time_dependencies(
 
     legend_labels = list()
     legend_labels.append(f"Mean score: {mean_lchd_score:.1%}")
-    legend_labels.append(f"StD of the score: {std_lchd_score:.1%}")
+    legend_labels.append(f"StDev of the score: {std_lchd_score:.1%}")
     legend_labels.append(f"Median score: {median_lchd_score:.1%} at time: {median_lchd_time:.0f} ps")
     legend_labels.append(f"Max score: {max_lchd_score:.1%} at time: {max_lchd_time:.0f} ps")
 
@@ -243,7 +244,7 @@ def plot_time_dependencies(
     ax.set_title("Mean LoCoHD values")
     ax.set_yticks(y_axis_ticks, labels=[f"{tick:.1%}" for tick in y_axis_ticks])
     ax.set_ylim(0, max_lchd)
-    fig.savefig(str(TARGET_DIR / f"mean_locohd.png"), dpi=200, bbox_inches="tight")
+    fig.savefig(str(TARGET_DIR / f"mean_locohd.svg"), dpi=300)
 
     print("\nPlotting for residues done!")
 
@@ -253,7 +254,7 @@ def plot_pca(x_values: np.ndarray, all_points: np.ndarray):
     print("Calculating and plotting LoCoHD principal components...")
 
     fig, ax = plt.subplots()
-    fig.tight_layout()
+    fig.set_size_inches(88 * MM_TO_INCH, 88 * MM_TO_INCH)
 
     # Skip the first frame, since it is an outlier (always 0)
     pca = PCA()
@@ -265,15 +266,19 @@ def plot_pca(x_values: np.ndarray, all_points: np.ndarray):
     ax.set_xlabel("$t$ / ns")
     ax.set_ylabel("PCA1")
     ax.set_title("Time Evolution of the First Principal Component")
-    fig.savefig(TARGET_DIR / "pca.png", dpi=200, bbox_inches="tight")
+    fig.savefig(TARGET_DIR / "pca.svg", dpi=300)
 
     # Plotting the first two principal component's time dependency
     ax.cla()
-    ax.scatter(principal_comp[:, 0], principal_comp[:, 1], c=x_values[1:])
+    ax.scatter(
+        principal_comp[:, 0], principal_comp[:, 1],
+        c=x_values[1:], cmap="autumn",
+        marker=".", edgecolors="black"
+    )
     ax.set_xlabel("PCA1")
     ax.set_ylabel("PCA2")
     ax.set_title("Time Evolution of the\nFirst Two Principal Components")
-    fig.savefig(TARGET_DIR / "pca_2.png", dpi=200, bbox_inches="tight")
+    fig.savefig(TARGET_DIR / "pca_2.svg", dpi=300)
 
     # Plotting the explained variance ratio of each component
     ax.cla()
@@ -286,13 +291,13 @@ def plot_pca(x_values: np.ndarray, all_points: np.ndarray):
     cumulative_expl_var = np.cumsum(pca.explained_variance_ratio_)
     cumulative_expl_var = np.append([0, ], cumulative_expl_var)
     ax.plot(np.arange(len(cumulative_expl_var)), cumulative_expl_var, c="black")
-    fig.savefig(TARGET_DIR / "pca_explained_variance.png", dpi=200, bbox_inches="tight")
+    fig.savefig(TARGET_DIR / "pca_explained_variance.svg", dpi=300)
 
     # Plotting the covariance matrix of the residues
     ax.cla()
     ax.imshow(pca.get_covariance())
     ax.set_title("Covariance Matrix between the\nLoCoHD Scores of Residues")
-    fig.savefig(TARGET_DIR / "pca_cov.png", dpi=200, bbox_inches="tight")
+    fig.savefig(TARGET_DIR / "pca_cov.svg", dpi=300)
 
     print("Principal components plotted!")
 
@@ -314,6 +319,11 @@ def save_blabelled_pdb(universe: Universe, all_points: np.ndarray):
 
 
 def main():
+
+    plt.rcParams["font.size"] = 7
+    plt.rcParams["font.family"] = "Arial"
+    plt.rcParams["figure.subplot.left"] = 0.2
+    plt.rcParams["figure.subplot.bottom"] = 0.15
 
     # Read the structure file and the trajectory
     universe = mda.Universe(str(STRUCTURE_PATH), str(TRAJECTORY_PATH))

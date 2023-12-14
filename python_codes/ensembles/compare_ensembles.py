@@ -20,17 +20,19 @@ from loco_hd import LoCoHD, WeightFunction, PrimitiveAssigner, PrimitiveAtomTemp
 
 ATOM_ID = Tuple[int, str]
 
-SAVE_DIR = Path("../workdir/prot_batch_resuls")
+SAVE_DIR = Path("../../workdir/prot_batch_resuls/h5")
 PATHS_AND_NAMES = [
-    # ("../data_sources/pdb_files/h5/dummy", "h5_dummy"),
-    ("../data_sources/pdb_files/h5/277", "h5_277"),
-    ("../data_sources/pdb_files/h5/288", "h5_288"),
-    ("../data_sources/pdb_files/h5/299", "h5_299"),
-    ("../data_sources/pdb_files/h5/310", "h5_310"),
-    ("../data_sources/pdb_files/h5/321", "h5_321"),
-    # ("../data_sources/pdb_files/PED00075e000", "PED00075e000"),
-    # ("../data_sources/pdb_files/PED00072e000", "PED00072e000"),
+    # ("../../data_sources/pdb_files/h5/dummy", "h5_dummy"),
+    ("../../data_sources/pdb_files/h5/277", "h5_277"),
+    ("../../data_sources/pdb_files/h5/288", "h5_288"),
+    ("../../data_sources/pdb_files/h5/299", "h5_299"),
+    ("../../data_sources/pdb_files/h5/310", "h5_310"),
+    ("../../data_sources/pdb_files/h5/321", "h5_321"),
+    # ("../../data_sources/pdb_files/PED00075e000", "PED00075e000"),
+    # ("../../data_sources/pdb_files/PED00072e000", "PED00072e000"),
 ]
+PRIMITIVE_TYPING_SCHEME = "all_atom.config.json"
+MM_TO_INCH = 0.0393701
 
 
 class AtomSelector(Select):
@@ -78,6 +80,11 @@ def calculate_rmsd(templates1: List[PrimitiveAtomTemplate], templates2: List[Pri
 
 def plot_result(in_dict: Dict[str, Any]):
 
+    plt.rcParams["font.size"] = 7
+    plt.rcParams["font.family"] = "Arial"
+    plt.rcParams["figure.subplot.left"] = 0.2
+    plt.rcParams["figure.subplot.bottom"] = 0.15
+
     rmsd_dmx: np.ndarray = in_dict["rmsd_dmx"]
     lchd_dmx: np.ndarray = in_dict["lchd_dmx"]
     lchd_by_atom: np.ndarray = in_dict["lchd_by_atom"]
@@ -108,15 +115,21 @@ def plot_result(in_dict: Dict[str, Any]):
     atom_lchd_mean = np.mean(lchd_by_atom)
     atom_lchd_std = np.std(lchd_by_atom)
     ax[1].plot([0, len(lchd_by_atom)], [atom_lchd_mean, atom_lchd_mean], c="red")
-    ax[1].fill_between([0, len(lchd_by_atom)],
-                       2 * [atom_lchd_mean - atom_lchd_std, ],
-                       2 * [atom_lchd_mean + atom_lchd_std, ],
-                       alpha=0.25, color="red", edgecolor=None)
+    ax[1].fill_between(
+        [0, len(lchd_by_atom)],
+        2 * [atom_lchd_mean - atom_lchd_std, ],
+        2 * [atom_lchd_mean + atom_lchd_std, ],
+        alpha=0.25, color="red", edgecolor=None
+    )
 
     atom_lchd_min = np.min(lchd_by_atom)
     atom_lchd_max = np.max(lchd_by_atom)
     plot_ticks = np.arange(atom_lchd_min, atom_lchd_max, (atom_lchd_max - atom_lchd_min) / 10)
     ax[1].set_yticks(plot_ticks, labels=[f"{tick:.1%}" for tick in plot_ticks])
+
+    # Setting the aspect ratio
+    aspect = np.diff(ax[1].get_xlim())[0] / np.diff(ax[1].get_ylim())[0]
+    ax[1].set_aspect(aspect)
 
     # Adding the statistics as a legend
     atom_lchd_median = np.median(lchd_by_atom)
@@ -128,12 +141,15 @@ def plot_result(in_dict: Dict[str, Any]):
     legend_labels.append(f"StD = {atom_lchd_std:.1%}")
     legend_handles = Rectangle((0, 0), 1, 1, fc="white", ec="white", lw=0, alpha=0)
     legend_handles = [legend_handles, ] * len(legend_labels)
-    ax[1].legend(legend_handles, legend_labels,
-                 loc="best", fontsize="small", fancybox=True,
-                 framealpha=0.7, handlelength=0, handletextpad=0)
+    ax[1].legend(
+        legend_handles, legend_labels,
+        loc="best", fontsize="small", fancybox=True,
+        framealpha=0.7, handlelength=0, handletextpad=0
+    )
 
-    plt.tight_layout()
-    fig.savefig(SAVE_DIR / f"{save_name}_plot.png", dpi=300)
+    fig.set_size_inches(180 * MM_TO_INCH, 88 * MM_TO_INCH)
+    fig.subplots_adjust(wspace=0.5)
+    fig.savefig(SAVE_DIR / f"{save_name}_plot.svg", dpi=300)
 
     # Plotting the LoCoHD - RMSD relation
     # This goes to a new plot!
@@ -142,7 +158,10 @@ def plot_result(in_dict: Dict[str, Any]):
     tril_idxs = np.tril_indices(len(rmsd_dmx), k=-1)
     tril_lhcd_dmx = lchd_dmx[tril_idxs]
     tril_rmsd_dmx = rmsd_dmx[tril_idxs]
-    ax.scatter(tril_lhcd_dmx, tril_rmsd_dmx, marker=".", alpha=0.3, color="blue", linewidth=0)
+    ax.scatter(
+        tril_lhcd_dmx, tril_rmsd_dmx,
+        marker=".", alpha=0.3, color="blue", linewidth=0
+    )
     ax.set_xlabel("LoCoHD score")
     ax.set_ylabel("RMSD / $\\AA$")
 
@@ -151,11 +170,11 @@ def plot_result(in_dict: Dict[str, Any]):
 
     tril_lhcd_dmx_min = np.min(tril_lhcd_dmx)
     tril_lhcd_dmx_max = np.max(tril_lhcd_dmx)
-    plot_ticks = np.arange(tril_lhcd_dmx_min, tril_lhcd_dmx_max, (tril_lhcd_dmx_max - tril_lhcd_dmx_min) / 10)
+    plot_ticks = np.arange(tril_lhcd_dmx_min, tril_lhcd_dmx_max, (tril_lhcd_dmx_max - tril_lhcd_dmx_min) / 6)
     ax.set_xticks(plot_ticks, labels=[f"{tick:.1%}" for tick in plot_ticks])
 
-    plt.tight_layout()
-    fig.savefig(SAVE_DIR / f"{save_name}_with_rmsd.png", dpi=300)
+    fig.set_size_inches(88 * MM_TO_INCH, 88 * MM_TO_INCH)
+    fig.savefig(SAVE_DIR / f"{save_name}_with_rmsd.svg", dpi=300)
 
 
 def compare_structures(prot_root_path: Path, save_name: str) -> Dict[str, Any]:
@@ -163,7 +182,7 @@ def compare_structures(prot_root_path: Path, save_name: str) -> Dict[str, Any]:
     print(f"Starting {save_name}...")
 
     # Create the PrimitiveAssigner instance
-    primitive_assigner = PrimitiveAssigner(Path("../primitive_typings/coarse_grained.config.json"))
+    primitive_assigner = PrimitiveAssigner(Path("../../primitive_typings") / PRIMITIVE_TYPING_SCHEME)
 
     # Initialize LoCoHD instance
     w_func = WeightFunction("uniform", [3., 10.])
