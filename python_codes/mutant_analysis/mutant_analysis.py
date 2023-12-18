@@ -18,17 +18,18 @@ from loco_hd import (
     PrimitiveAtom
 )
 
-SOURCE_DIR = Path("../../data_sources/for_mutation_tests")
-MUTANT_PDBS = SOURCE_DIR / "mutants_renamed"
-REF_STRUCTURE = SOURCE_DIR / "Optimized_1cho.pdb"
-SKEMPI_SOURCE = SOURCE_DIR / "for_foldx" / "skempi_v2.csv"
-SKEMPI_PDB_KEY = "1CHO"
-JOULE_TO_KCAL = 0.000239006
-
-WORKDIR = Path("../../workdir/for_mutation_tests")
-MM_TO_INCH = 0.0393701
+PDB_KEY = "1CHO"
+SOURCE_DIR = Path(f"../../data_sources/for_mutation_tests/{PDB_KEY}")
+MUTANT_PDBS = SOURCE_DIR / "mutants_em"
+REF_STRUCTURE = SOURCE_DIR / f"Optimized_{PDB_KEY.lower()}.pdb"
 
 PRIMITIVE_TYPING_SCHEME = "all_atom_with_centroid.config.json"
+
+SKEMPI_SOURCE = Path("../../data_sources/for_mutation_tests/skempi_v2.csv")
+JOULE_TO_KCAL = 0.000239006
+
+WORKDIR = Path(f"../../workdir/for_mutation_tests/{PDB_KEY}")
+MM_TO_INCH = 0.0393701
 
 
 def read_ddgs():
@@ -39,7 +40,7 @@ def read_ddgs():
     skempi = [
         line.split(";")
         for line in skempi
-        if line.startswith(SKEMPI_PDB_KEY)
+        if line.startswith(PDB_KEY)
     ]
 
     out_dict = dict()
@@ -102,6 +103,16 @@ def create_plot(resi_name: str, ddg_values: np.ndarray, resi_scores: np.ndarray)
         np.abs(ddg_values[mask]), resi_scores[mask],
         marker=".", color="black"
     )
+    ax.set_yticks(
+        ax.get_yticks(),
+        labels=[f"{x:.1%}" for x in ax.get_yticks()]
+    )
+    ax.set_xlabel(
+        "$| \\Delta \\Delta G | / \\mathrm{kcal} \\, \\mathrm{mol}^{-1}$"
+    )
+    ax.set_ylabel(
+        "LoCoHD score"
+    )
 
     fig.savefig(WORKDIR / f"{resi_name.replace('/', '.')}.svg", dpi=300)
     plt.close(fig)
@@ -138,10 +149,10 @@ def main():
     # Dealing with the mutant structures.
     all_lchd_scores = list()
 
-    for mut_id, _ in mut_ddg_values:
+    for mut_idx, (mut_id, _) in enumerate(mut_ddg_values):
 
         # Reading the mutant structures.
-        mut_filename = f"1cho_{mut_id}.pdb"
+        mut_filename = f"{PDB_KEY.lower()}_{mut_id}_em.pdb"
         mut_structure: Structure = pdb_parser.get_structure(mut_id, MUTANT_PDBS / mut_filename)
         mut_structure_prats = assigner.assign_primitive_structure(mut_structure)
         mut_structure_pras = list(map(prat_to_pra, mut_structure_prats))
@@ -158,7 +169,7 @@ def main():
         )
 
         all_lchd_scores.append(locohd_scores)
-        print(f"{mut_filename} done!")
+        print(f"{mut_idx}: {mut_filename} done!")
 
     all_lchd_scores = np.array(all_lchd_scores)  # (number of mutations, number of residues)
     ddg_values = np.array([x[1] for x in mut_ddg_values])  # (number of mutations, )
