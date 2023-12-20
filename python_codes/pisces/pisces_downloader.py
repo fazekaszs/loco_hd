@@ -103,7 +103,7 @@ def download_pisces(pisces_source: Path, file_target: Path):
         disordered_resi = list()
         for residue in protein[0].get_residues():
 
-            if type(residue) == DisorderedResidue:
+            if type(residue) is DisorderedResidue:
                 disordered_resi.append(residue.full_id)
 
         # Replacing disordered residues.
@@ -132,7 +132,7 @@ def download_pisces(pisces_source: Path, file_target: Path):
 
             if atom.element not in ALLOWED_ELEMENTS:
                 atoms_to_remove.append(current_full_id)
-            elif type(atom) == DisorderedAtom:
+            elif type(atom) is DisorderedAtom:
                 disordered_atoms.append(current_full_id)
 
         # Removing banned elements.
