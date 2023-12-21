@@ -93,7 +93,76 @@ __Expected runtime:__ "instant"
 
 __Input files needed:__ none
 
-## Experiment 3: `casp14_compare_structures.py`
+## Experiment 3: Contents of the casp14 directory
+
+### Comparison of lDDT, CAD and LoCoHD scores
+
+This pipeline will use the structures from the CASP14 competition,
+including both experimental and predicted structures. The goal is
+to assess the behavioural similarities and differences between the
+lDDT, CAD and LoCoHD scores. For this, statistical descriptors and
+plots are outputted.
+
+The scripts should be run in the following order:
+
+1. `casp14_tarfile_structure_extractor.py` extracts the structures
+ from the `.tar` files as BioPython `Structure` instances. The results
+ are saved as a single `.pickle` file containing a nested dictionary.
+ The first keys of the dictionary are the CASP IDs of the structures,
+ while the second keys are the predictor IDs ("true", "1", ... "5").
+ The values are the BioPython structures. Note, that atoms not present 
+ in the experimental structures, but are present in the predicted 
+ structures are filtered out! Set the constants `PREDICTOR_KEY`,
+ `TARFILE_ROOT` and `TARGET_DIR` to their appropriate values.
+2. `casp14_create_data_for_ost.py` converts the previously mentioned
+ pickled file. Saves a similar pickled dictionary, but values are now
+ `.pdb` formatted strings. Constants to set: `PREDICTOR_KEY` and `SOURCE_DIR`.
+3. `casp14_ost_target_script.py` compares all predicted structures to
+ the true structure using a some of the available metrics in OpenStructure
+ (lDDT, GDT_TS, RMSD, CAD-score, ...).
+ Saves a pickled, highly nested dictionary. Keys to this dictionary are the 
+ following: </br></br>
+ __KEY__ &#10122; CASP ID (a string, e.g.: `"T1024"`) &rarr; </br>
+ __KEY__ &#10123; predictor number (an integer from 1 to 5) &rarr; </br>
+ __KEY__ &#10124; either "per_resi" or "single" &rarr; </br>
+ __KEY__ &#10125; score name (a string, e.g.: `"lddt"`, `"cad_score"` ...) &rarr; </br>
+ __KEY__ &#10126; residue ID (This only exists, if the 3rd key is `"per_resi"`.
+ This is a string in the format of \[chain ID\]/\[residue number\]-\[residue name\].
+ For example: `"A/195-GLY"`.) &rarr; </br> 
+ __VALUE__ : the corresponding score </br>
+ <br> This script was tested in the __OpenStructure docker container__, but
+ can be run (in theory) using the non-dockerized version.
+ Only the `PREDICTOR_KEY` constant should be set.
+4. `casp14_extend_with_locohd.py` extends the pickled dictionary saved from the
+ previous step with LoCoHD score data. Set the constants `PREDICTOR_KEY` and `WORKDIR`.
+5. `casp14_plotting.py` creates CAD-LoCoHD and lDDT-LoCoHD scatter plots.
+ Also saves two 2D histograms containing the cumulative results of the scatter plots.
+ Constants to set, again, are `PREDICTOR_KEY` and `WORKDIR`.
+6. `casp14_statistics.py` creates and saves a dictionary (again, in a pickled format)
+ containing statistics about the score calculations. The following keys are valid in the 
+ saved dictionary: </br> </br>
+ __KEY__ &#10122; either `"score_names"`, `"median_summary"`, `"correlation_mx_summary"`,
+ `"median_gaps"` or `"corrmx_gaps"`
+ &rarr; </br>
+ __KEY__ &#10123; any of the following: `"min"`, `"max"`, `"mean"`, `"median"` or
+ `"StDev"` (only if __KEY__ &#10122; is either `"median_summary"` or `"correlation_mx_summary"`) 
+ or any of the score names / score-pair names (only if __KEY__ &#10122; is either 
+ `"median_gaps"` or `"corrmx_gaps"`)
+ &rarr; </br>
+ __VALUE__ </br> </br>
+ If __KEY__ &#10122; is `"score_names"`, then __KEY__ &#10123; does not exist and the 
+ __VALUE__ is simply a numpy ndarray with `dtype=str`, containing the different score
+ names (lDDT, CAD, LoCoHD). </br>
+ If __KEY__ &#10122; is either `"median_summary"` or `"correlation_mx_summary"`, then
+ __KEY__ &#10123; exists and the __VALUE__ is a numeric numpy ndarray, containing the
+ corresponding score statistics. </br>
+ If __KEY__ &#10122; is either `"median_gaps"` or `"corrmx_gaps"`, then __KEY__ &#10123; 
+ is one of the score names / score-pair names (as a two-element frozenset) and __VALUE__
+ is a tuple describing the largest median score- or SpR gaps found. The first element of 
+ the tuple is the structure name, the next two elements are the predicted structure
+ indices between 1 and 5, while the last element is the size of the gap.
+
+__----- !! UNDER CONSTRUCTION !! -----__
 
 This will compare two structures coming from the same CASP14 contestant for
 the same target protein. The contestant (predictor) name is set by the variable

@@ -183,7 +183,7 @@ class Statistics:
 
     def summary(self):
 
-        meadian_summary = {
+        median_summary = {
             "min": np.min(self.median_scores, axis=0),
             "max": np.max(self.median_scores, axis=0),
             "mean": np.mean(self.median_scores, axis=0),
@@ -203,7 +203,7 @@ class Statistics:
 
         return {
             "score_names": self.score_names,
-            "median_summary": meadian_summary,
+            "median_summary": median_summary,
             "correlation_mx_summary": correlation_mx_summary,
             **gaps
         }
