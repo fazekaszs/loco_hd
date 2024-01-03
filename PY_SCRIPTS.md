@@ -152,7 +152,7 @@ The scripts should be run in the following order:
  Needless to say, set the global constants `PREDICTOR_KEY` and `WORKDIR` again.
  </br>
 
-```json
+```
 {
     "score_names": np.ndarray[str],
     
@@ -202,7 +202,7 @@ Example outputs for the `casp14_plotting.py` and `casp14_compare_specific_struct
 scripts:
 
 <p align="middle">
-    <img src="https://github.com/fazekaszs/loco_hd/blob/master/images/lddt_T1043TS427_1.png" alt="lddt_T1043TS427_1" height=400">
+    <img src="https://github.com/fazekaszs/loco_hd/blob/master/images/lddt_T1064TS427_1.png" alt="lddt_T1064TS427_1" height=400">
     <br/>
     <img src="https://github.com/fazekaszs/loco_hd/blob/master/images/TS427_lDDT_full_hist.png" alt="TS427_lDDT_full_hist" height=400">
     <br/>
