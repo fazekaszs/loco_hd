@@ -151,37 +151,39 @@ The scripts should be run in the following order:
  the same, just with score-name pairs (stored as two-element frozensets).
  Needless to say, set the global constants `PREDICTOR_KEY` and `WORKDIR` again.
  </br>
- ```json
- {
-     "score_names": np.ndarray[str],
-     
-     "median_summary": {
-         "min": ndarray[1, float], "max": ndarray[1, float],
-         "mean": ndarray[1, float], "median": ndarray[1, float],
-         "StDev": ndarray[1, float]
-     },
-     "correlation_mx_summary": {     
-         "min": ndarray[2, float], "max": ndarray[2, float],
-         "mean": ndarray[2, float], "median": ndarray[2, float],
-         "StDev": ndarray[2, float]
-     },
-     
-     "median_gaps": {
-          "SCORE NAME": (
-              "STRUCTURE NAME", "IDX1", "IDX2", 
-              largest gap size as a single float
-          ),
-          ...
-     },
-     "corrmx_gaps": {
-          frozenset({"SCORE NAME 1", "SCORE NAME 2"}): (
-              "STRUCTURE NAME", "IDX1", "IDX2", 
-              largest gap size as a single float
-          ),
-          ...     
-     }
- }
- ```
+
+```json
+{
+    "score_names": np.ndarray[str],
+    
+    "median_summary": {
+        "min": ndarray[1, float], "max": ndarray[1, float],
+        "mean": ndarray[1, float], "median": ndarray[1, float],
+        "StDev": ndarray[1, float]
+    },
+    "correlation_mx_summary": {     
+        "min": ndarray[2, float], "max": ndarray[2, float],
+        "mean": ndarray[2, float], "median": ndarray[2, float],
+        "StDev": ndarray[2, float]
+    },
+    
+    "median_gaps": {
+         "SCORE NAME": (
+             "STRUCTURE NAME", "IDX1", "IDX2", 
+             largest gap size as a single float
+         ),
+         ...
+    },
+    "corrmx_gaps": {
+         frozenset({"SCORE NAME 1", "SCORE NAME 2"}): (
+             "STRUCTURE NAME", "IDX1", "IDX2", 
+             largest gap size as a single float
+         ),
+         ...     
+    }
+}
+```
+
 7. `casp14_compare_specific_structures.py` creates histograms and B-factor labelled
  structures for a specific predicted structure-pair. To specify the proteins to be
  compared set the constants `PREDICTOR_NAME`, `STRUCTURE_NAME`, `PREDICTED_SUFFIX1`
