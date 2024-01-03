@@ -22,9 +22,9 @@ In the pictures the PDF and CDF of these functions will be shown.
 Modify the `param_sets` variable if you want to try out additional weight functions.
 
 <p align="middle">
-    <img src="https://github.com/fazekaszs/loco_hd/blob/master/images/exp1.png" alt="exp1" width=500">
+    <img src="https://github.com/fazekaszs/loco_hd/blob/master/images/test_integrators.png" alt="test_integrators" height=500">
     <br/>
-    An example output for Experiment 1
+    An example output for the test_integrators.py script.
 </p>
 
 __Expected runtime:__ few seconds
@@ -84,9 +84,9 @@ sequence2 = np.random.choice(categories[3:], size=n_of_points)
 In this case, we expect "all 1" LoCoHD scores at all delta values.
 
 <p align="middle">
-    <img src="https://github.com/fazekaszs/loco_hd/blob/master/images/exp2.png" alt="exp2" width=500">
+    <img src="https://github.com/fazekaszs/loco_hd/blob/master/images/simple_test.png" alt="simple_test" width=500">
     <br/>
-    An example output for Experiment 2
+    An example output for the simple_test.py script.
 </p>
 
 __Expected runtime:__ "instant"
@@ -111,7 +111,7 @@ The scripts should be run in the following order:
  The first keys of the dictionary are the CASP IDs of the structures,
  while the second keys are the predictor IDs ("true", "1", ... "5").
  The values are the BioPython structures. Note, that atoms not present 
- in the experimental structures, but are present in the predicted 
+ in the experimental structures, but present in the predicted 
  structures are filtered out! Set the constants `PREDICTOR_KEY`,
  `TARFILE_ROOT` and `TARGET_DIR` to their appropriate values.
 2. `casp14_create_data_for_ost.py` converts the previously mentioned
@@ -139,113 +139,84 @@ The scripts should be run in the following order:
  Also saves two 2D histograms containing the cumulative results of the scatter plots.
  Constants to set, again, are `PREDICTOR_KEY` and `WORKDIR`.
 6. `casp14_statistics.py` creates and saves a dictionary (again, in a pickled format)
- containing statistics about the score calculations. The following keys are valid in the 
- saved dictionary: </br> </br>
- __KEY__ &#10122; either `"score_names"`, `"median_summary"`, `"correlation_mx_summary"`,
- `"median_gaps"` or `"corrmx_gaps"`
- &rarr; </br>
- __KEY__ &#10123; any of the following: `"min"`, `"max"`, `"mean"`, `"median"` or
- `"StDev"` (only if __KEY__ &#10122; is either `"median_summary"` or `"correlation_mx_summary"`) 
- or any of the score names / score-pair names (only if __KEY__ &#10122; is either 
- `"median_gaps"` or `"corrmx_gaps"`)
- &rarr; </br>
- __VALUE__ </br> </br>
- If __KEY__ &#10122; is `"score_names"`, then __KEY__ &#10123; does not exist and the 
- __VALUE__ is simply a numpy ndarray with `dtype=str`, containing the different score
- names (lDDT, CAD, LoCoHD). </br>
- If __KEY__ &#10122; is either `"median_summary"` or `"correlation_mx_summary"`, then
- __KEY__ &#10123; exists and the __VALUE__ is a numeric numpy ndarray, containing the
- corresponding score statistics. </br>
- If __KEY__ &#10122; is either `"median_gaps"` or `"corrmx_gaps"`, then __KEY__ &#10123; 
- is one of the score names / score-pair names (as a two-element frozenset) and __VALUE__
- is a tuple describing the largest median score- or SpR gaps found. The first element of 
- the tuple is the structure name, the next two elements are the predicted structure
- indices between 1 and 5, while the last element is the size of the gap.
+ containing statistics about the score calculations.
+ A schema for the pickled dictionary can be seen below.
+ Under the key `"median_summary"` the statistics for the per-residue median values can be seen.
+ NDArrays contain the statistics for the different score types in the same order as the 
+ score name order in `"score_names"`. The contents of `"correlation_mx_summary"` is the same, just
+ with elements of the per-residue score correlation matrices.
+ In `"median_gaps"` the largest gaps for the different per-residue scores are collected. Values are
+ tuples containing the structure name for which the largest median gap was found, the structure 
+ indices creating the gap, and the gap size itself, respectively. In `"corrmx_gaps"` it is all 
+ the same, just with score-name pairs (stored as two-element frozensets).
+ Needless to say, set the global constants `PREDICTOR_KEY` and `WORKDIR` again.
+ </br>
+ ```json
+ {
+     "score_names": np.ndarray[str],
+     
+     "median_summary": {
+         "min": ndarray[1, float], "max": ndarray[1, float],
+         "mean": ndarray[1, float], "median": ndarray[1, float],
+         "StDev": ndarray[1, float]
+     },
+     "correlation_mx_summary": {     
+         "min": ndarray[2, float], "max": ndarray[2, float],
+         "mean": ndarray[2, float], "median": ndarray[2, float],
+         "StDev": ndarray[2, float]
+     },
+     
+     "median_gaps": {
+          "SCORE NAME": (
+              "STRUCTURE NAME", "IDX1", "IDX2", 
+              largest gap size as a single float
+          ),
+          ...
+     },
+     "corrmx_gaps": {
+          frozenset({"SCORE NAME 1", "SCORE NAME 2"}): (
+              "STRUCTURE NAME", "IDX1", "IDX2", 
+              largest gap size as a single float
+          ),
+          ...     
+     }
+ }
+ ```
+7. `casp14_compare_specific_structures.py` creates histograms and B-factor labelled
+ structures for a specific predicted structure-pair. To specify the proteins to be
+ compared set the constants `PREDICTOR_NAME`, `STRUCTURE_NAME`, `PREDICTED_SUFFIX1`
+ and `PREDICTED_SUFFIX2` (the latter ones are the prediction indices). Also, set `WORKDIR`
+ the usual way. The constant `RESI_IDX_SHIFT` shifts the residue indices to match a certain
+ numbering scheme. For example: for the structure T1064TS427 - downloaded from the CASP14 
+ archive - to match the numbering in the PDB 7JTL a `RESI_IDX_SHIFT` of 15 is needed. Constants
+ `MAX_LCHD` and `MAX_LDDT` set the plotting maximum for the LoCoHD and lDDT scores, respectively.
 
-__----- !! UNDER CONSTRUCTION !! -----__
+Structures can be downloaded from the 
+[linked](https://doi.org/10.6084/m9.figshare.24885540.v1) 
+FigShare repository or from the
+[CASP14 archive](https://predictioncenter.org/download_area/CASP14/).
 
-This will compare two structures coming from the same CASP14 contestant for
-the same target protein. The contestant (predictor) name is set by the variable
-`PREDICTOR_NAME`, while the protein name is set by the variable `STRUCTURE_NAME`.
-The exact predictions are set by the suffixes `PREDICTED_SUFFIX1` and `PREDICTED_SUFFIX2`,
-which come after the protein and predictor name. Create the directories specified by
-the `LDDT_TARS_PATH`, `PDB_DIR_PATH` and `TARGET_PATH` variables. The former two
-directories should contain the necessary input files:
-
-- `LDDT_TARS_PATH` should contain the `{STRUCTURE_NAME}.tgz` file,
-- `PDB_DIR_PATH` should contain the corresponding `{STRUCTURE_NAME}{PREDICTOR_NAME}{PREDICTED_SUFFIX1}.pdb`
-  and `{STRUCTURE_NAME}{PREDICTOR_NAME}{PREDICTED_SUFFIX2}.pdb` files, along with the true
-  (experimental) pdb file named `{STRUCTURE_NAME}.pdb`.
-
-These can be downloaded from the CASP14 archive:
-
-- https://predictioncenter.org/download_area/CASP14/predictions/regular/
-- https://predictioncenter.org/download_area/CASP14/results/lddt/
-
-The outputs will be
-
-- LoCoHD score and lDDT score B-labelled pdb files,
-- three pdb files containing the primitive atoms of the true structure and the predicted structures,
-- two images depicting the LoCoHD scores of the top 10 residues.
-
-The residue numbers on the images can be shifted with the `RESI_IDX_SHIFT` integer variable,
-while the maximum LoCoHD score shown can also be set by the `MAX_LCHD` variable.
+Example outputs for the `casp14_plotting.py` and `casp14_compare_specific_structures.py` 
+scripts:
 
 <p align="middle">
-    <img src="https://github.com/fazekaszs/loco_hd/blob/master/images/exp3.png" alt="exp3" width=500">
+    <img src="https://github.com/fazekaszs/loco_hd/blob/master/images/lddt_T1043TS427_1.png" alt="lddt_T1043TS427_1" height=400">
     <br/>
-    An example output for Experiment 3
+    <img src="https://github.com/fazekaszs/loco_hd/blob/master/images/TS427_lDDT_full_hist.png" alt="TS427_lDDT_full_hist" height=400">
+    <br/>
+    <img src="https://github.com/fazekaszs/loco_hd/blob/master/images/T1064TS427_1_top10lchd.png" alt="T1064TS427_1_top10lchd" height=400">
+    <br/>
+    An example lDDT-LoCoHD scatterplot and heatmap and lDDT-LoCoHD barplot.
 </p>
 
-__Expected runtime:__ few seconds
+__Expected runtime:__ most scripts run within a few seconds or minutes at most, but `casp14_ost_target_script.py`
+can take a bit more time to complete (at least inside the Docker container).
 
 __Input files needed:__ all downloadable, see the description above
 
-## Experiment 4: `casp14_predictor_extractor.py` and `casp14_predictor_test.py`
+## Experiment 4: Contents of the pisces directory
 
-This experiment consists of 2 parts:
-
-1. extraction, selection, parsing and collection of the necessary protein structures,
-   done by the script `casp14_predictor_extractor.py`, and
-2. calculation of the LoCoHD scores, plotting, and statistics calculation,
-   done by the script `casp14_predictor_test.py`.
-
-Download all files from https://predictioncenter.org/download_area/CASP14/targets/ and put them in
-`loco_hd/data_sources/casp14`, i.e. to the path set by the `TARFILE_ROOT` variable in
-`casp14_predictor_extractor.py`. Here, also create the directory `loco_hd/workdir/casp14`
-(referenced by `TARGET_DIR`) if you haven't done it already. Set the `PREDICTOR_KEY` to the 
-contestant's CASP14 key you want to test. This script will output a single pickled file containing
-the BioPython parsed pdb structures in a dictionary.
-
-This file will be read by `casp14_predictor_test.py`, so running the previous script is
-necessary for it to succeed. It will also use lDDT info containing tar files that can be
-downloaded from one of the links in Experiment 3. Download all of these files into 
-`loco_hd/data_sources/casp14/lDDTs` (corresponding variable: `LDDT_TARS_PATH`).
-To download all files from here, you can use:
-
-```bash
-wget --no-parent -r https://predictioncenter.org/download_area/CASP14/results/lddt/
-```
-
-The outputs will be 
-- images for all predictions, showing individual residue lDDT vs. LoCoHD scatter plots, 
-  along with simple statistics belonging to the corresponding prediction,
-- a full 2D histogram as a heatmap, coalescing the scatter plots into one single 2D lDDT
-  vs. LoCoHD distribution,
-- a markdown (md file) describing global statistics.
-
-<p align="middle">
-    <img src="https://github.com/fazekaszs/loco_hd/blob/master/images/exp4_1.png" alt="exp4_1" width=400">
-    <img src="https://github.com/fazekaszs/loco_hd/blob/master/images/exp4_2.png" alt="exp4_2" width=400">
-    <br/>
-    Example outputs for Experiment 4
-</p>
-
-__Expected runtime:__ few minutes
-
-__Input files needed:__ all downloadable, see the description above
-
-## Experiment 5: `pisces_downloader.py`, `pisces_random_pairs.py` and `pisces_random_pairs_analyze.py`
+__!!! --- UNDER CONSTRUCTION --- !!!__
 
 This experiment consists of 3 parts:
 1. downloading and normalizing PISCES filtered pdb files with `pisces_downloader.py`,
