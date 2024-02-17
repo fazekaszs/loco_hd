@@ -183,7 +183,7 @@ Or if only primitive atoms with the ```"Cent"``` primitive type are anchors:
 anchor_pairs = [
     (idx, idx) 
     for idx, prat in enumerate(pra_templates1)
-    if atom.primitive_type == "Cent"
+    if prat.primitive_type == "Cent"
 ]
 ```
 
