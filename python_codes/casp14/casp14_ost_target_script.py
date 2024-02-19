@@ -14,33 +14,31 @@ import pickle
 from ost.io import PDBStrToEntity
 from ost.mol.alg import scoring
 
-# Set the necessary constants. The available predictor keys are the following:
-# AF2: TS427, BAKER: TS473, BAKER-experimental: TS403, FEIG-R2: TS480, Zhang: TS129
-PREDICTOR_KEY = "TS129"
-
 
 def main():
 
-    with open(f"/data/{PREDICTOR_KEY}_string_structures.pickle", "rb") as f:
+    with open(f"/data/filtered_structures.pickle", "rb") as f:
         str_collection = pickle.load(f)
 
     # A highly nested dict:
-    # key1: CASP structure ID (e.g.: T1024)
-    # key2: prediction number (1...5)
+    # key1: CASP structure name (e.g.: T1024)
+    # key2: prediction number (structure_id) (1...5)
     # key3: either "single" or "per_residue"
     # key4: score name (lddt, gdtts, rmsd...)
     # key5 (only applicable if we are in "per_residue"): residue ID ([chain name]/[resi number]-[resi tlc])
     # value: score value
     measurement_collection = dict()
 
-    for structure_id, structure_options in str_collection.items():
+    for structure_name, structure_bundle in str_collection.items():
 
-        reference_structure = PDBStrToEntity(structure_options["true"])
-        measurement_collection[structure_id] = dict()
+        print(f"Starting bundle {structure_name}...")
 
-        for predictor_key, structure_str in structure_options.items():
+        reference_structure = PDBStrToEntity(structure_bundle["true"])
+        measurement_collection[structure_name] = dict()
 
-            if predictor_key == "true":
+        for structure_id, structure_str in structure_bundle.items():
+
+            if structure_id == "true":
                 continue
 
             predicted_structure = PDBStrToEntity(structure_str)
@@ -68,13 +66,15 @@ def main():
                 for resi in predicted_structure.residues
             }
 
-            measurement_collection[structure_id][int(predictor_key)] = {
+            measurement_collection[structure_name][int(structure_id)] = {
                 "single": single_measurements,
                 "per_residue": per_residue_measurements
             }
 
-            with open(f"/data/{PREDICTOR_KEY}_ost_results.pickle", "wb") as f:
+            with open(f"/data/ost_results.pickle", "wb") as f:
                 pickle.dump(measurement_collection, f)
+
+            print(f"\t{structure_id} done!")
 
 
 if __name__ == "__main__":
