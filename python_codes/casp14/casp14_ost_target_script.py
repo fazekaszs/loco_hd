@@ -10,9 +10,18 @@
 # $DATA_DIR is the directory containing the pickled input data for this script.
 
 import pickle
+from datetime import datetime
 
 from ost.io import PDBStrToEntity
 from ost.mol.alg import scoring
+
+
+def log_line(prev_log: str, msg: str) -> str:
+
+    dt_now = datetime.now().strftime("[ %Y.%m.%d %H:%M:%S ]")
+    new_log = f"{prev_log}{dt_now} {msg}\n"
+
+    return new_log
 
 
 def main():
@@ -28,10 +37,12 @@ def main():
     # key5 (only applicable if we are in "per_residue"): residue ID ([chain name]/[resi number]-[resi tlc])
     # value: score value
     measurement_collection = dict()
+    log_str = ""
 
-    for structure_name, structure_bundle in str_collection.items():
+    for idx, (structure_name, structure_bundle) in enumerate(str_collection.items()):
 
-        print(f"Starting bundle {structure_name}...")
+        new_log_line = f"Starting structure bundle {structure_name} ({idx + 1}/{len(str_collection)}):"
+        log_str = log_line(log_str, new_log_line)
 
         reference_structure = PDBStrToEntity(structure_bundle["true"])
         measurement_collection[structure_name] = dict()
@@ -40,6 +51,8 @@ def main():
 
             if structure_id == "true":
                 continue
+
+            log_str = log_line(log_str, f"\tStarting with structure id {structure_id}")
 
             predicted_structure = PDBStrToEntity(structure_str)
 
@@ -71,10 +84,11 @@ def main():
                 "per_residue": per_residue_measurements
             }
 
-            with open(f"/data/ost_results.pickle", "wb") as f:
-                pickle.dump(measurement_collection, f)
+            with open(f"/data/ost_results.log", "w") as f:
+                f.write(log_str)
 
-            print(f"\t{structure_id} done!")
+    with open(f"/data/ost_results.pickle", "wb") as f:
+        pickle.dump(measurement_collection, f)
 
 
 if __name__ == "__main__":

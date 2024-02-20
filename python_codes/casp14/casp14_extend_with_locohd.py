@@ -1,11 +1,12 @@
 import pickle
+import sys
 from typing import Dict
 from pathlib import Path
 
 import numpy as np
 
 from loco_hd import LoCoHD, PrimitiveAtom, WeightFunction, PrimitiveAssigner, PrimitiveAtomTemplate, TagPairingRule
-from utils import InLinePDBParser
+from tarfile_structure_extractor_utils import InLinePDBParser
 from config import EXTRACTOR_OUTPUT_DIR
 
 
@@ -58,11 +59,25 @@ def main():
             pred_pra_templates = primitive_assigner.assign_primitive_structure(current_structure)
             pred_prim_atoms = list(map(prat_to_pra, pred_pra_templates))
 
+            # Anchor correspondence sanity check.
+            for idx1, idx2 in anchors:
+
+                tag1 = true_prim_atoms[idx1].tag
+                tag2 = pred_prim_atoms[idx2].tag
+
+                if tag1 == tag2:
+                    continue
+
+                sys.exit(
+                    f"ERROR: tag mismatch! "
+                    f"{tag1} and {tag2} are not equal in structure {structure_name}_{structure_id}!"
+                )
+
             # Calculate LoCoHD score with a threshold_distance = 10.
             lchd_scores = lchd.from_primitives(true_prim_atoms, pred_prim_atoms, anchors, 10)
 
-            # Replace the chain id " " in the primitive atom tags to "A"
-            anchor_resi_ids = ["A" + true_prim_atoms[anchor[0]].tag[1:] for anchor in anchors]
+            # Extract anchor atom parent residue IDs from the primitive atom tag fields.
+            anchor_resi_ids = [true_prim_atoms[anchor[0]].tag for anchor in anchors]
 
             # Refresh the score collection
             score_collection[structure_name][int(structure_id)]["per_residue"]["LoCoHD"] = {

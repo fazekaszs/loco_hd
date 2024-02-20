@@ -1,5 +1,4 @@
 import pickle
-from pathlib import Path
 from typing import Tuple
 
 import matplotlib.pyplot as plt
@@ -7,10 +6,7 @@ import numpy as np
 from matplotlib.patches import Rectangle
 from scipy.stats import spearmanr
 
-# Set the necessary constants. The available predictor keys are the following:
-# AF2: TS427, BAKER: TS473, BAKER-experimental: TS403, FEIG-R2: TS480, Zhang: TS129
-PREDICTOR_KEY = "TS129"
-WORKDIR = Path(f"../../workdir/casp14/{PREDICTOR_KEY}_results/")
+from config import PREDICTOR_KEY, EXTRACTOR_OUTPUT_DIR
 MM_TO_INCH = 0.0393701
 
 
@@ -55,7 +51,7 @@ class Histogram:
         ax.set_xlabel(f"{score1_name} score")
         ax.set_ylabel(f"{score2_name} score")
 
-        fig.savefig(WORKDIR / "plots" / f"{plot_save_name}.svg", dpi=300)
+        fig.savefig(EXTRACTOR_OUTPUT_DIR / "plots" / f"{plot_save_name}.svg", dpi=300)
         plt.close(fig)
 
 
@@ -130,7 +126,7 @@ def create_plot(
         framealpha=0.7, handlelength=0, handletextpad=0
     )
 
-    fig.savefig(WORKDIR / "plots" / f"{plot_save_name}.svg", dpi=300)
+    fig.savefig(EXTRACTOR_OUTPUT_DIR / "plots" / f"{plot_save_name}.svg", dpi=300)
 
     plt.close(fig)
 
@@ -143,7 +139,7 @@ def main():
     plt.rcParams["figure.subplot.bottom"] = 0.15
 
     # Read the score collection from the pickled file
-    with open(WORKDIR / f"{PREDICTOR_KEY}_ost_results_extended.pickle", "rb") as f:
+    with open(EXTRACTOR_OUTPUT_DIR / f"ost_results_extended.pickle", "rb") as f:
         score_collection = pickle.load(f)
 
     # Create the 2D histograms for the specific score types.

@@ -1,14 +1,10 @@
 import pickle
 from typing import Dict
-from pathlib import Path
 
 import numpy as np
 from scipy.stats import spearmanr
 
-# Set the necessary constants. The available predictor keys are the following:
-# AF2: TS427, BAKER: TS473, BAKER-experimental: TS403, FEIG-R2: TS480, Zhang: TS129
-PREDICTOR_KEY = "TS129"
-WORKDIR = Path(f"../../workdir/casp14/{PREDICTOR_KEY}_results/")
+from config import PREDICTOR_KEY, EXTRACTOR_OUTPUT_DIR
 
 
 class Statistics:
@@ -212,7 +208,7 @@ class Statistics:
 def main():
 
     # Read the score collection from the pickled file
-    with open(WORKDIR / f"{PREDICTOR_KEY}_ost_results_extended.pickle", "rb") as f:
+    with open(EXTRACTOR_OUTPUT_DIR / f"ost_results_extended.pickle", "rb") as f:
         score_collection = pickle.load(f)
 
     # Initializing the statistics object.
@@ -229,7 +225,7 @@ def main():
 
     summary = stats.summary()
 
-    with open(WORKDIR / f"{PREDICTOR_KEY}_statistics.pickle", "wb") as f:
+    with open(EXTRACTOR_OUTPUT_DIR / f"statistics.pickle", "wb") as f:
         pickle.dump(summary, f)
 
 
