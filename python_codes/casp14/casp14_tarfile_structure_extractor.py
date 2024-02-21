@@ -16,7 +16,9 @@ from tarfile_structure_extractor_utils import (
     normalize_ref_structures,
     rename_nameless_chains,
     repair_chain_correspondence,
-    apply_filtering,
+    apply_common_resi_filtering,
+    apply_common_id_filtering,
+    count_identical_chains,
     stringify_structures
 )
 
@@ -39,8 +41,14 @@ def main():
     # in-place, pairs up reference and predicted chain IDs based on sequence alignments
     repair_chain_correspondence(all_structures)
 
-    # in-place, removes bundle-level non-common atoms
-    apply_filtering(all_structures)
+    # in-place, removes residues that are not present in all bundles
+    apply_common_resi_filtering(all_structures)
+
+    # in-place, removes bundle-level non-common entities recursively
+    apply_common_id_filtering(all_structures)
+
+    # only reports: it counts the (almost) identical chains
+    count_identical_chains(all_structures, 0.8)
 
     # converts the BioPython Structure objects to pdb strings
     all_structures = stringify_structures(all_structures)

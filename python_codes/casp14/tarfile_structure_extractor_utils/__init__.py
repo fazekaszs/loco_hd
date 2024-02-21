@@ -1,8 +1,7 @@
 from .structure_readers import read_in_ref_structures, read_in_pred_structures
 from .normalize_ref_structures import normalize_ref_structures
-from .rename_nameless_chains import rename_nameless_chains
-from .repair_chain_correspondence import repair_chain_correspondence
-from .filter_children import apply_filtering
+from .chain_ops import rename_nameless_chains, repair_chain_correspondence, count_identical_chains
+from .filter_children import apply_common_resi_filtering, apply_common_id_filtering
 from .stringify_structures import stringify_structures
 
 from .inline_pdb_parser import InLinePDBParser

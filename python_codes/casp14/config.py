@@ -17,9 +17,9 @@ _out_dir_name = f"{CASP_VERSION}_{PREDICTOR_KEY}_results"
 EXTRACTOR_OUTPUT_DIR = Path(f"../../workdir/{CASP_VERSION}") / _out_dir_name
 
 # To leave out structures from the analysis.
-IGNORED_STRUCTURES = set()
-# IGNORED_STRUCTURES = {
-#     "H1114",  # skip this due to incorrect chain ID-ID mapping, error discovered with TS229
-#     "H1111",  # skip this due to incorrect chain ID-ID mapping, error discovered with TS278
-#     "H1135",  # ... TS278
-# } if CASP_VERSION == "casp15" else {}
+# IGNORED_STRUCTURES = set()
+IGNORED_STRUCTURES = {
+    # Results in an OST error:
+    # Residue numbers in each target chain must be strictly increasing if resnum_alignments are enabled
+    "H1111",
+} if CASP_VERSION == "casp15" else {}
