@@ -10,7 +10,10 @@ from pathlib import Path
 
 from Bio.PDB.Structure import Structure
 
-# Examined structures:
+from tarfile_structure_extractor_utils import InLinePDBParser
+from config import EXTRACTOR_OUTPUT_DIR, PREDICTOR_KEY
+
+# Examined structures (casp14):
 # - AF2:
 #     - T1064TS427_1 and _5
 #     - RESI_IDX_SHIFT = 15 to adjust for PDB ID 7JTL
@@ -22,13 +25,11 @@ from Bio.PDB.Structure import Structure
 #   and
 #     - T1046s1_...
 
-PREDICTOR_NAME = "TS427"
-STRUCTURE_NAME = "T1064"
+STRUCTURE_NAME = "H1166"
 PREDICTED_SUFFIX1 = "1"
 PREDICTED_SUFFIX2 = "5"
 
-WORKDIR = Path(f"../../workdir/casp14/{PREDICTOR_NAME}_results")
-RESI_IDX_SHIFT = 15
+RESI_IDX_SHIFT = 0
 MAX_LCHD = 0.4
 MAX_LDDT = 1.0
 MM_TO_INCH = 0.0393701
@@ -48,8 +49,12 @@ def create_histograms(
 
     def resi_id_to_label(resi_id: str) -> str:
 
+        chain_id = resi_id[0]
+
+        label = f"({chain_id}) " if chain_id != " " else ""
+
         split_resi_id = resi_id[2:].split("-")
-        label = "$"
+        label += "$"
         label += f"\\mathrm{{{split_resi_id[1]}}}"
         label += f"^{{{int(split_resi_id[0]) + RESI_IDX_SHIFT}}}"
         label += "$"
@@ -88,7 +93,7 @@ def create_histograms(
     ax[1].set_ylabel("Residue name")
 
     fig.set_size_inches(180 * MM_TO_INCH, 88 * MM_TO_INCH)
-    fig.subplots_adjust(left=0.1, right=0.95, wspace=0.4)
+    fig.subplots_adjust(left=0.13, right=0.95, wspace=0.4)
     fig.savefig(output_path / f"{name}_top10lchd.svg", dpi=300)
 
     plt.close(fig)
@@ -98,10 +103,11 @@ def b_label_structure(structure: Structure, score_dict: Dict[str, float], output
 
     for resi_id, score_value in score_dict.items():
 
+        chain_id = resi_id[0]
         resi_num = int(resi_id[2:].split("-")[0])
 
         atom: Atom
-        for atom in structure[0][" "][resi_num].get_atoms():
+        for atom in structure[0][chain_id][resi_num].get_atoms():
             atom.bfactor = score_value
 
     io = PDBIO()
@@ -112,14 +118,16 @@ def b_label_structure(structure: Structure, score_dict: Dict[str, float], output
 def main():
 
     # Loading in the structures.
-    with open(WORKDIR / f"{PREDICTOR_NAME}_biopython_structures.pickle", "rb") as f:
-        structures: Dict[str, Dict[str, Structure]] = pickle.load(f)
+    with open(EXTRACTOR_OUTPUT_DIR / f"filtered_structures.pickle", "rb") as f:
+        structures: Dict[str, Dict[str, str]] = pickle.load(f)
 
-    protein_pred1 = structures[STRUCTURE_NAME][PREDICTED_SUFFIX1]
-    protein_pred2 = structures[STRUCTURE_NAME][PREDICTED_SUFFIX2]
+    pdb_parser = InLinePDBParser(QUIET=True)
+
+    protein_pred1 = pdb_parser.from_str("", structures[STRUCTURE_NAME][PREDICTED_SUFFIX1])
+    protein_pred2 = pdb_parser.from_str("", structures[STRUCTURE_NAME][PREDICTED_SUFFIX2])
 
     # Loading in the scores.
-    with open(WORKDIR / f"{PREDICTOR_NAME}_ost_results_extended.pickle", "rb") as f:
+    with open(EXTRACTOR_OUTPUT_DIR / f"ost_results_extended.pickle", "rb") as f:
         scores = pickle.load(f)
 
     lchd_values1 = scores[STRUCTURE_NAME][int(PREDICTED_SUFFIX1)]["per_residue"]["LoCoHD"]
@@ -128,13 +136,13 @@ def main():
     lddt_values2 = scores[STRUCTURE_NAME][int(PREDICTED_SUFFIX2)]["per_residue"]["lddt"]
 
     # Target path.
-    output_path = WORKDIR / f"{STRUCTURE_NAME}{PREDICTOR_NAME}_{PREDICTED_SUFFIX1}_{PREDICTED_SUFFIX2}"
+    output_path = EXTRACTOR_OUTPUT_DIR / f"{STRUCTURE_NAME}{PREDICTOR_KEY}_{PREDICTED_SUFFIX1}_{PREDICTED_SUFFIX2}"
     if not os.path.exists(output_path):
         os.mkdir(output_path)
 
     # Names of the predicted structures, like T1064TS427_1.
-    pred1_name = f"{STRUCTURE_NAME}{PREDICTOR_NAME}_{PREDICTED_SUFFIX1}"
-    pred2_name = f"{STRUCTURE_NAME}{PREDICTOR_NAME}_{PREDICTED_SUFFIX2}"
+    pred1_name = f"{STRUCTURE_NAME}{PREDICTOR_KEY}_{PREDICTED_SUFFIX1}"
+    pred2_name = f"{STRUCTURE_NAME}{PREDICTOR_KEY}_{PREDICTED_SUFFIX2}"
 
     # Plot the histograms for the first five residues, based on the largest
     # LoCoHD order.
