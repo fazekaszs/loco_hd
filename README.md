@@ -61,9 +61,46 @@ ran on less capable machines.
 
 ## How can I install it?
 
-Whatever installation method you choose, you definitely need to install 
+### Using docker
+
+A Dockerfile is provided to install LoCoHD in a containerized manner.
+Make sure that you have [docker](https://www.docker.com/) installed on your system.
+Clone the GitHub repository and enter it:
+
+```bash
+git clone https://github.com/fazekaszs/loco_hd && cd loco_hd
+```
+
+Next, build the image:
+
+```bash
+docker build -t loco_hd:latest .
+```
+
+Using this way, you can either use the LoCoHD CLI from this image...: 
+
+```bash
+docker run --rm loco_hd:latest [LoCoHD arguments]
+```
+
+...or run custom scripts:
+
+```bash
+docker run --rm -v [ptscr]:/script -v [ptstr]:/structures --entrypoint python loco_hd:latest [ptscr]
+```
+
+where `[ptscr]` is the local path to the script to run (can be `$(pwd)` for example),
+and `[ptstr]` is the path to the structures to be compared (probably used by the script).
+
+<b style="color:red">Note:</b> This docker image only contains LoCoHD, BioPython, NumPy and the standard Python
+library installed. Your scripts won't be able to utilize other libraries in it, like SciPy, ScikitLearn or 
+Matplotlib. If you want to use these, modify the Dockerfile accordingly.
+
+### Install the Rust compiler
+
+If you install LoCoHD from source or using pip, you definitely need to install 
 [Rust](https://www.rust-lang.org/tools/install) to your system.
-To do this you can choose from several methods. Either you install Rust usind the
+To do this you can choose from several methods. Either you install Rust using the
 "standard" way with the official script:
 
 ```bash
@@ -84,6 +121,9 @@ If you are a Windows user,
 visit [this](https://forge.rust-lang.org/infra/other-installation-methods.html) link.
 
 The overall installation time does not exceed a few minutes.
+
+<b style="color:red">Note:</b> Maturin is a build-dependency of LoCoHD, and it won't run outside 
+a virtual environment!
 
 ### From PyPI
 
@@ -134,9 +174,61 @@ cargo test --no-default-features
 ```
 
 
-## How can I use it?
+## How can I use it in the CLI?
 
-LoCoHD was intended to be used within Python scripts, mostly through [BioPython](https://github.com/biopython/biopython) as the main `.pdb` file reader. It is also possible to use it with other protein/molecular structure readers, but the user has to write the appropriate parser that converts the information within the file into the information required for LoCoHD. An example for this can be found [here](./python_codes/trajectory_analyzer.py), where the structures come from a molecular dynamics trajectory and parsing is achieved by [MDAnalysis](https://github.com/MDAnalysis/mdanalysis).
+Although this is __highly experimental__ yet and was not thoroughly tested, it is possible to use LoCoHD from the CLI.
+Generally, you run it like this:
+
+```bash
+python -m loco_hd [LoCoHD arguments]
+```
+
+or using the containerized version:
+
+```bash
+docker run [Docker arguments] loco_hd:latest [LoCoHD arguments]
+```
+
+The required LoCoHD arguments are the following (for more information, 
+use the `--help` flag.):
+- `-s1` specifies the path to the first structure (pdb) file
+- `-s2` specifies the path to the second structure (pdb) file
+- `-pts` specifies the path to the primitive typing scheme (json) file
+- `-afp` specifies the path to an anchor pairing file
+
+The latter flag must point to a file having the following properties:
+- it should be a simple text file, not a binary
+- it can contain newline characters, since these will be stripped from the file (but spaces won't!)
+- it must contain primitive atom __pair__ defining parts, separated by semicolons
+- a primitive atom pair defining part must contain exactly two primitive atom defining part,
+ separated by a single colon
+- a primitive atom defining part contains a chain ID (e.g.: `A`), a residue ID (e.g.: `123-GLY`), and
+ an atom set (e.g.: `CA,CB,CG`, __without__ spaces!) separated by forward-slashes
+
+The latter one is necessary, since primitive atoms can come from multiple true atoms (like centroids 
+and coarse grained atoms). Here is an example file:
+
+```text
+ /2-GLU/OE1,OE2:B/73-CYS/SG;
+ /6-ARG/CZ:B/82-ILE/CB,CG1,CG2,CD1;
+ /6-ARG/CZ:B/105-ARG/CZ;
+ /21-ARG/CZ:B/105-ARG/CZ
+```
+
+This file specifies that a primitive atom coming from chain `" "` (note the space!), residue Glu<sup>2</sup>, 
+atom set `{OE1, OE2}` should be paired up with a primitive atom coming from chain `"B"`, residue Cys<sup>73</sup>, 
+atom set `{SG}`.
+The environments around these anchors will be compared (along with 3 other pairings) using LoCoHD.
+
+## How can I use it in my scripts?
+
+LoCoHD was originally intended to be used within Python scripts (and this is still
+the preferred way), mostly through [BioPython](https://github.com/biopython/biopython) as the main `.pdb` file reader. 
+It is also possible to use it with other protein/molecular structure readers, 
+but the user has to write the appropriate parser that converts the information 
+within the file into the information required for LoCoHD. 
+An example for this can be found [here](./python_codes/trajectory_analyzer.py), where the structures come from 
+a molecular dynamics trajectory and parsing is achieved by [MDAnalysis](https://github.com/MDAnalysis/mdanalysis).
 
 For the comparison of two protein structures with LoCoHD the following simple steps are necessary:
 
