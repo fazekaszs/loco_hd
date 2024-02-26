@@ -97,27 +97,34 @@ __Input files needed:__ none
 
 ### Comparison of lDDT, CAD and LoCoHD scores
 
-This pipeline will use the structures from the CASP14 competition,
+This pipeline will use the structures from the CASP14 or CASP15 competition,
 including both experimental and predicted structures. The goal is
 to assess the behavioural similarities and differences between the
 lDDT, CAD and LoCoHD scores. For this, statistical descriptors and
 plots are outputted.
 
+In order to run this script batch, you should modify the constants in 
+the `config.py` script:
+
+- `CASP_VERSION` should be either `"casp14"` or `"casp15"`
+- `PREDICTOR_KEY` is a CASP contestant ID (starting with TS)
+- `SOURCE_DIR` is the root directory for the structure containing folders.
+ Inside this folder should be a directory named predictions (see `"PRED_TAR_DIR"`)
+ and a directory named targets (see `"REFS_TAR_DIR`").
+- `EXTRACTOR_OUTPUT_DIR` is the working directory, where the content of the
+ CASP tarfiles should be extracted (not directly, but first processed)
+- `IGNORED_STRUCTURES` are structures that should not be considered for the analysis
+
 The scripts should be run in the following order:
 
 1. `casp14_tarfile_structure_extractor.py` extracts the structures
- from the `.tar` files as BioPython `Structure` instances. The results
- are saved as a single `.pickle` file containing a nested dictionary.
+ from the `.tar` files as BioPython `Structure` instances, processes and filters
+ them, and the results are saved as a single `.pickle` file containing a nested dictionary.
  The first keys of the dictionary are the CASP IDs of the structures,
  while the second keys are the predictor IDs ("true", "1", ... "5").
- The values are the BioPython structures. Note, that atoms not present 
- in the experimental structures, but present in the predicted 
- structures are filtered out! Set the constants `PREDICTOR_KEY`,
- `TARFILE_ROOT` and `TARGET_DIR` to their appropriate values.
-2. `casp14_create_data_for_ost.py` converts the previously mentioned
- pickled file. Saves a similar pickled dictionary, but values are now
- `.pdb` formatted strings. Constants to set: `PREDICTOR_KEY` and `SOURCE_DIR`.
-3. `casp14_ost_target_script.py` compares all predicted structures to
+ The values are PDB formatted strings. Note, that elements inside the structures
+ will be filtered out based on the content of the reference and predicted structures!
+2. `casp14_ost_target_script.py` compares all predicted structures to
  the true structure using a some of the available metrics in OpenStructure
  (lDDT, GDT_TS, RMSD, CAD-score, ...).
  Saves a pickled, highly nested dictionary. Keys to this dictionary are the 
@@ -132,13 +139,11 @@ The scripts should be run in the following order:
  __VALUE__ : the corresponding score </br>
  <br> This script was tested in the __OpenStructure docker container__, but
  can be run (in theory) using the non-dockerized version.
- Only the `PREDICTOR_KEY` constant should be set.
-4. `casp14_extend_with_locohd.py` extends the pickled dictionary saved from the
- previous step with LoCoHD score data. Set the constants `PREDICTOR_KEY` and `WORKDIR`.
-5. `casp14_plotting.py` creates CAD-LoCoHD and lDDT-LoCoHD scatter plots.
+3. `casp14_extend_with_locohd.py` extends the pickled dictionary saved from the
+ previous step with LoCoHD score data.
+4. `casp14_plotting.py` creates CAD-LoCoHD and lDDT-LoCoHD scatter plots.
  Also saves two 2D histograms containing the cumulative results of the scatter plots.
- Constants to set, again, are `PREDICTOR_KEY` and `WORKDIR`.
-6. `casp14_statistics.py` creates and saves a dictionary (again, in a pickled format)
+5. `casp14_statistics.py` creates and saves a dictionary (again, in a pickled format)
  containing statistics about the score calculations.
  A schema for the pickled dictionary can be seen below.
  Under the key `"median_summary"` the statistics for the per-residue median values can be seen.
@@ -149,7 +154,6 @@ The scripts should be run in the following order:
  tuples containing the structure name for which the largest median gap was found, the structure 
  indices creating the gap, and the gap size itself, respectively. In `"corrmx_gaps"` it is all 
  the same, just with score-name pairs (stored as two-element frozensets).
- Needless to say, set the global constants `PREDICTOR_KEY` and `WORKDIR` again.
  </br>
 
 ```
@@ -184,11 +188,11 @@ The scripts should be run in the following order:
 }
 ```
 
-7. `casp14_compare_specific_structures.py` creates histograms and B-factor labelled
+6. `casp14_compare_specific_structures.py` creates histograms and B-factor labelled
  structures for a specific predicted structure-pair. To specify the proteins to be
- compared set the constants `PREDICTOR_NAME`, `STRUCTURE_NAME`, `PREDICTED_SUFFIX1`
- and `PREDICTED_SUFFIX2` (the latter ones are the prediction indices). Also, set `WORKDIR`
- the usual way. The constant `RESI_IDX_SHIFT` shifts the residue indices to match a certain
+ compared set the constants `STRUCTURE_NAME`, `PREDICTED_SUFFIX1`
+ and `PREDICTED_SUFFIX2` (the latter ones are the prediction indices).
+ The constant `RESI_IDX_SHIFT` shifts the residue indices to match a certain
  numbering scheme. For example: for the structure T1064TS427 - downloaded from the CASP14 
  archive - to match the numbering in the PDB 7JTL a `RESI_IDX_SHIFT` of 15 is needed. Constants
  `MAX_LCHD` and `MAX_LDDT` set the plotting maximum for the LoCoHD and lDDT scores, respectively.
@@ -218,12 +222,14 @@ __Input files needed:__ all downloadable, see the description above
 
 ## Experiment 4: Contents of the pisces directory
 
-__!!! --- UNDER CONSTRUCTION --- !!!__
-
 This experiment consists of 3 parts:
 1. downloading and normalizing PISCES filtered pdb files with `pisces_downloader.py`,
 2. generating the raw data with `pisces_random_pairs.py`,
 3. analyzing the raw data with `pisces_random_pairs_analyze.py`.
+
+Additionally, `pisces_ring_analysis.py` generates RING analysis of the PISCES dataset
+and fits a neural network on the environment interaction counts to predict the LoCoHD
+between different environments. For further details, see the publication.
 
 First, go to https://dunbrack.fccc.edu/pisces/ and generate a pdb file list filtered according
 to your needs. Then, download the list, reference it in the `PISCES_FILENAME` variable of 
