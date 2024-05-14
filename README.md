@@ -5,8 +5,6 @@
 [![Rust](https://img.shields.io/badge/Rust-1.70-red)](https://www.rust-lang.org/)
 [![Maturin](https://img.shields.io/badge/Maturin-0.14-green)](https://github.com/PyO3/maturin)
 
-[![doi](https://img.shields.io/badge/doi-soon-fuchsia)]()
-
 <p align="middle"><img src="https://github.com/fazekaszs/loco_hd/blob/master/images/locohd_logo.png" alt="logo" width=500/></p>
 
 
@@ -19,7 +17,23 @@ it is based on the measurement of local composition differences, rather than of 
 
 ## Where can I read about it?
 
-This work is yet to be published in a scientific journal.
+This work has been published in [Nature Communications](https://www.nature.com/articles/s41467-024-48225-0).
+If you would like to cite us, you can do it like this:
+```bibtex
+@article{Fazekas2024,
+  title = {LoCoHD: a metric for comparing local environments of proteins},
+  volume = {15},
+  ISSN = {2041-1723},
+  url = {http://dx.doi.org/10.1038/s41467-024-48225-0},
+  DOI = {10.1038/s41467-024-48225-0},
+  number = {1},
+  journal = {Nature Communications},
+  publisher = {Springer Science and Business Media LLC},
+  author = {Fazekas,  Zsolt and K. Menyhárd,  Dóra and Perczel,  András},
+  year = {2024},
+  month = may 
+}
+```
 
 ## Demo scripts
 
