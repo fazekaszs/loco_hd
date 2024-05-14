@@ -10,6 +10,7 @@ import numpy as np
 
 import tensorflow as tf
 import matplotlib.pyplot as plt
+import pandas as pd
 from matplotlib.patches import Rectangle
 from scipy.stats import spearmanr
 
@@ -329,6 +330,16 @@ def plot_results(ffnn: tf.keras.models.Model, merged_dataset: EnvironmentPairLis
     })
 
     y_pred = ffnn.predict_on_batch([t_in1, t_in2])
+
+    # Save the true and predicted values
+
+    df = pd.DataFrame(
+        data=np.array([y_true, y_pred]).T,
+        columns=["true LoCoHD", "predicted LoCoHD"]
+    )
+    df.to_csv(OUTPUT_PATH / "true_vs_pred_LoCoHD.tsv", sep="\t")
+
+    # Calculate statistics
 
     corr_s = spearmanr(y_true, y_pred)
     mean_abs_err = np.mean(np.abs(y_pred - y_true))

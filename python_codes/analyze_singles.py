@@ -5,6 +5,7 @@ from Bio.PDB.PDBParser import PDBParser
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
 from loco_hd import (
     LoCoHD,
@@ -15,13 +16,13 @@ from loco_hd import (
     TagPairingRule
 )
 
-STRUCTURE_SOURCES = Path("../data_sources/pdb_files/ApAAP")
-PDB_NAME1 = "3o4j"
-PDB_NAME2 = "3o4h"
-PROT_REF_PATH = STRUCTURE_SOURCES / f"{PDB_NAME1}_pymol_cleaned_filtered.pdb"
-PROT_MUT_PATH = STRUCTURE_SOURCES / f"{PDB_NAME2}_pymol_cleaned_filtered.pdb"
+STRUCTURE_SOURCES = Path("../data_sources/pdb_files/tripsins")
+PDB_NAME1 = "1DPO"
+PDB_NAME2 = "2TRM"
+PROT_REF_PATH = STRUCTURE_SOURCES / f"{PDB_NAME1}_pymol_cleaned.pdb"
+PROT_MUT_PATH = STRUCTURE_SOURCES / f"{PDB_NAME2}_pymol_cleaned.pdb"
 
-WORKDIR = Path("../workdir/ApAAP")
+WORKDIR = Path("../workdir/tripsins")
 PLOT_NAME = f"{PDB_NAME1}_vs_{PDB_NAME2}"
 
 MAX_LCHD = 0.3
@@ -53,15 +54,28 @@ def create_histograms(
     fig, ax = plt.subplots()
 
     first_scores = sorted(lchd_scores.items(), key=lambda x: x[1], reverse=True)[:10]
-    first_scores = list(map(
+
+    # Format residue names in LaTeX
+    first_scores_formatted = list(map(
         lambda item: (resi_id_to_label(item[0]), item[1]),
         first_scores
     ))
 
+    # Save raw data
+    pds = pd.Series(
+        data=list(map(lambda x: x[1], first_scores)),
+        index=list(map(lambda x: x[0], first_scores))
+    )
+
+    pds.to_csv(
+        output_path / f"{name}_top10lchd.tsv",
+        sep="\t"
+    )
+
     # Create horizontal barplots
     ax.barh(
-        list(map(lambda x: x[0], first_scores)),
-        list(map(lambda x: x[1], first_scores)),
+        list(map(lambda x: x[0], first_scores_formatted)),
+        list(map(lambda x: x[1], first_scores_formatted)),
         color="blue"
     )
 
