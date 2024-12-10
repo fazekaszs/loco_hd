@@ -9,19 +9,15 @@ name = "loco_hd"
 crate-type = ["cdylib"]
 
 [dependencies.pyo3]
-version = "0.18.1"
-
-# This is required for running the unit-tests with PyO3 without an error.
-[features]
-extension-module = ["pyo3/extension-module"]
-default = ["extension-module"]
+version = "0.23.3"
+features = ["extension-module"]
 
 [dependencies.rayon]
-version = "1.7.0"
+version = "1.10.0"
 
 [dependencies.kd-tree]
-version = "0.5.1"
+version = "0.6.0"
 
 # This is required for the KdPoint trait implementation.
 [dependencies.typenum]
-version = "1.16.0"
+version = "1.17.0"

@@ -9,28 +9,33 @@ use rayon::iter::ParallelIterator;
 
 use kd_tree::KdTree;
 
-#[cfg(test)]
-mod weight_function_utests;
 mod weight_function;
 pub use weight_function::WeightFunction;
 
-#[cfg(test)]
-mod tag_pairing_rule_utests;
 mod tag_pairing_rule;
 pub use tag_pairing_rule::{TagPairingRule, TagPairingRuleVariants};
 
-#[cfg(test)]
-mod pmf_utests;
 mod pmf;
 use pmf::PMFSystem;
-
-#[cfg(test)]
-mod locohd_utests;
 
 mod primitive_atom;
 pub use primitive_atom::PrimitiveAtom;
 
 mod utils;
+
+#[derive(FromPyObject, IntoPyObject, Clone)]
+/// Decides whether a single WeightFunction or multiple WeightFunctions are used.
+pub enum WeightFunctionOptions {
+    Single(WeightFunction),
+    Multiple(HashMap<String, WeightFunction>)
+}
+
+#[derive(FromPyObject, IntoPyObject, Clone)]
+/// Decides whether the anchor pairs use a single, shared weight function or a per-anchor specified one.
+pub enum AnchorPairSpecifier {
+    WithWeightFunctionKey(Vec<(usize, usize, String)>),
+    WithoutWeightFunctionKey(Vec<(usize, usize)>)
+}
 
 #[pyclass]
 pub struct LoCoHD {
@@ -38,65 +43,23 @@ pub struct LoCoHD {
     #[pyo3(get)]
     categories: HashMap<String, usize>,
     #[pyo3(get)]
-    w_func: WeightFunction,
+    w_func: WeightFunctionOptions,
     #[pyo3(get)]
     tag_pairing_rule: TagPairingRule,
     thread_pool: ThreadPool
 }
 
-#[pymethods]
+// Methods unavailable from Python.
 impl LoCoHD {
 
-    #[new]
-    pub fn build(
-        categories: Vec<String>, 
-        w_func: Option<WeightFunction>, 
-        tag_pairing_rule: Option<TagPairingRule>,
-        n_of_threads: Option<usize>
-    ) -> PyResult<Self> {
-
-        // For faster lookup of the categories we use a HashMap instead of the supplied Vec.
-        let categories: HashMap<_, _> = categories
-            .into_iter()
-            .enumerate()
-            .map(|(a, b)| (b, a))
-            .collect();
-
-        // Set default WeightFunction if necessary
-        let w_func = match w_func {
-            None => WeightFunction::build("uniform".to_owned(), vec![3., 10.])?,
-            Some(v) => v
-        };
-
-        // Set default TagPairingRule options if necessary
-        let tag_pairing_rule = match tag_pairing_rule {
-            None => TagPairingRule::build(TagPairingRuleVariants::WithoutList { accept_same: true })?,
-            Some(v) => v
-        };
-
-        // Set multithreading options
-        let n_of_threads = match n_of_threads {
-            Some(n) => n,
-            None => 0
-        };
-        let thread_pool = ThreadPoolBuilder::new()
-            .num_threads(n_of_threads)
-            .build()
-            .or_else(|err| {
-                let err_msg = format!("Error while building the thread pool!\nDebug: {:?}", err);
-                return Err(PyValueError::new_err(err_msg));
-            })?;
-
-        Ok(Self { categories, w_func, tag_pairing_rule, thread_pool })
-    }
-
     /// Calculates the hellinger integral between two environments belonging to two anchor points.
-    pub fn from_anchors(&self, 
-        seq_a: Vec<String>, 
-        seq_b: Vec<String>, 
-        dists_a: Vec<f64>, 
-        dists_b: Vec<f64>) -> PyResult<f64> 
-    {
+    pub fn hellinger_integral(&self, 
+        seq_a: &Vec<String>, 
+        seq_b: &Vec<String>, 
+        dists_a: &Vec<f64>, 
+        dists_b: &Vec<f64>,
+        w_func: &WeightFunction
+    ) -> PyResult<f64> {
 
         // Check input validity.
         if seq_a.len() != dists_a.len() || seq_b.len() != dists_b.len() {
@@ -151,7 +114,7 @@ impl LoCoHD {
             } else { unreachable!(); };
 
             // Increment the integral and assign the distance buffer to the new distance.
-            let delta_w = self.w_func.integral_range(dist_buffer, new_dist)?;
+            let delta_w = w_func.integral_range(dist_buffer, new_dist)?;
             h_integral +=  delta_w * current_hdist;
             dist_buffer = new_dist;
         }
@@ -164,7 +127,7 @@ impl LoCoHD {
             // In this case, the dists_a list is surely finished (see prev. while loop condition), but
             // the dists_b list is not.
             idx_b += 1;
-            let delta_w = self.w_func.integral_range(dists_a[dists_a.len() - 1], dists_b[idx_b])?;
+            let delta_w = w_func.integral_range(dists_a[dists_a.len() - 1], dists_b[idx_b])?;
             h_integral += delta_w * current_hdist;
 
             pmf_system.update_pmf2(&seq_b[idx_b])?;
@@ -175,7 +138,7 @@ impl LoCoHD {
                 idx_b += 1;
 
                 let current_hdist = pmf_system.hellinger_dist()?;
-                let delta_w = self.w_func.integral_range(dists_b[idx_b - 1], dists_b[idx_b])?;
+                let delta_w = w_func.integral_range(dists_b[idx_b - 1], dists_b[idx_b])?;
                 h_integral += delta_w * current_hdist;
 
                 pmf_system.update_pmf2(&seq_b[idx_b])?;
@@ -183,7 +146,7 @@ impl LoCoHD {
 
             // Last integral until infinity.
             let current_hdist = pmf_system.hellinger_dist()?;
-            let delta_w = self.w_func.integral_range(dists_b[dists_b.len() - 1], f64::INFINITY)?;
+            let delta_w = w_func.integral_range(dists_b[dists_b.len() - 1], f64::INFINITY)?;
             h_integral += delta_w * current_hdist;
 
         } else if idx_a < seq_a.len() - 1 {
@@ -192,7 +155,7 @@ impl LoCoHD {
 
             // In this case, the dists_b list is finished, but dists_a is not.
             idx_a += 1;
-            let delta_w = self.w_func.integral_range(dists_b[dists_b.len() - 1], dists_a[idx_a])?;
+            let delta_w = w_func.integral_range(dists_b[dists_b.len() - 1], dists_a[idx_a])?;
             h_integral += delta_w * current_hdist;
 
             pmf_system.update_pmf1(&seq_a[idx_a])?;
@@ -203,7 +166,7 @@ impl LoCoHD {
                 idx_a += 1;
 
                 let current_hdist = pmf_system.hellinger_dist()?;
-                let delta_w = self.w_func.integral_range(dists_a[idx_a - 1], dists_a[idx_a])?;
+                let delta_w = w_func.integral_range(dists_a[idx_a - 1], dists_a[idx_a])?;
                 h_integral += delta_w * current_hdist;
 
                 pmf_system.update_pmf1(&seq_a[idx_a])?;
@@ -211,7 +174,7 @@ impl LoCoHD {
 
             // Last integral until infinity.
             let current_hdist = pmf_system.hellinger_dist()?;
-            let delta_w = self.w_func.integral_range(dists_a[dists_a.len() - 1], f64::INFINITY)?;
+            let delta_w = w_func.integral_range(dists_a[dists_a.len() - 1], f64::INFINITY)?;
             h_integral += delta_w * current_hdist;
 
         } else if idx_a == seq_a.len() - 1 && idx_b == seq_b.len() - 1 {
@@ -219,7 +182,7 @@ impl LoCoHD {
             // Last integral until infinity.
             // In this case, dists_a[dists_a.len() - 1] == dists_b[dists_b.len() - 1]
             let current_hdist = pmf_system.hellinger_dist()?;
-            let delta_w = self.w_func.integral_range(dists_a[dists_a.len() - 1], f64::INFINITY)?;
+            let delta_w = w_func.integral_range(dists_a[dists_a.len() - 1], f64::INFINITY)?;
             h_integral += delta_w * current_hdist;
 
         } else { unreachable!(); }
@@ -227,16 +190,143 @@ impl LoCoHD {
         Ok(h_integral)
     }
 
+    /// Check for the correct pairing of the WeightFunctionOptions set for self and the w_func_keys.
+    /// If correct, it maps these keys (if they exist) to the correct WeightFunctions.
+    fn keys_to_weight_functions(&self, 
+        w_func_keys: &Option<Vec<String>>,
+        target_len: usize
+    ) -> PyResult<Vec<&WeightFunction>> {
+
+        match (&self.w_func, w_func_keys) {
+
+            // First correct pairing: multiple WF options with a given key vector.
+            (
+                WeightFunctionOptions::Multiple(key_to_fn), 
+                Some(key_vec)
+            ) => {
+
+                if key_vec.len() != target_len {
+
+                    let err_msg = format!(
+                        "The w_func_keys vector has an invalid length ({} instead of {})!",
+                        key_vec.len(), target_len
+                    );
+                    return Err(PyValueError::new_err(err_msg));
+                }
+
+                let (retrieved, failed): (Vec<_>, Vec<_>) = key_vec.iter()
+                    .map(|k| key_to_fn.get(k))
+                    .partition(Option::is_some);
+
+                if failed.len() > 0 {
+
+                    let err_msg = format!(
+                        "The vector contains {} out of {} invalid weight function keys!",
+                        failed.len(), key_vec.len()
+                    );
+                    return Err(PyValueError::new_err(err_msg));
+
+                } else { 
+                    Ok(retrieved.iter().map(|x| x.unwrap()).collect()) 
+                }
+            },
+
+            // Second correct pairing: a single WF option without a key vector.
+            (
+                WeightFunctionOptions::Single(w_func),
+                None
+            ) => Ok(vec![w_func; target_len]),
+
+            // Everything else is invalid!
+            _ => {
+
+                let err_msg = format!(
+                    "Invalid pairing for the LoCoHD instance's 
+                    w_func option and the method's w_func_keys parameter!"
+                );
+                return Err(PyValueError::new_err(err_msg));
+            }
+        }
+    }
+
+}
+
+#[pymethods]
+impl LoCoHD {
+
+    #[new]
+    #[pyo3(signature = (categories, w_func=None, tag_pairing_rule=None, n_of_threads=None))]
+    pub fn build(
+        categories: Vec<String>, 
+        w_func: Option<WeightFunctionOptions>, 
+        tag_pairing_rule: Option<TagPairingRule>,
+        n_of_threads: Option<usize>
+    ) -> PyResult<Self> {
+
+        // For faster lookup of the categories we use a HashMap instead of the supplied Vec.
+        let categories: HashMap<_, _> = categories
+            .into_iter()
+            .enumerate()
+            .map(|(a, b)| (b, a))
+            .collect();
+
+        // Set default WeightFunctionOptions if necessary
+        let w_func = match w_func {
+            None => WeightFunctionOptions::Single(WeightFunction::build("uniform".to_owned(), vec![3., 10.])?),
+            Some(v) => v
+        };
+
+        // Set default TagPairingRule options if necessary
+        let tag_pairing_rule = match tag_pairing_rule {
+            None => TagPairingRule::build(TagPairingRuleVariants::WithoutList { accept_same: true })?,
+            Some(v) => v
+        };
+
+        // Set multithreading options
+        let n_of_threads = match n_of_threads {
+            Some(n) => n,
+            None => 0
+        };
+        let thread_pool = ThreadPoolBuilder::new()
+            .num_threads(n_of_threads)
+            .build()
+            .or_else(|err| {
+                let err_msg = format!("Error while building the thread pool!\nDebug: {:?}", err);
+                return Err(PyValueError::new_err(err_msg));
+            })?;
+
+        Ok(Self { categories, w_func, tag_pairing_rule, thread_pool })
+    }
+
+    /// Wrapper for the hellinger_integral function unavailable from Python.
+    #[pyo3(signature = (seq_a, seq_b, dists_a, dists_b, w_func_key = None))]
+    pub fn from_anchors(&self, 
+        seq_a: Vec<String>, 
+        seq_b: Vec<String>, 
+        dists_a: Vec<f64>, 
+        dists_b: Vec<f64>,
+        w_func_key: Option<String>
+    ) -> PyResult<f64> {
+
+        let w_func = self.keys_to_weight_functions(
+            &w_func_key.map(|x| vec![x; 1]), 
+            1
+        )?[0];
+        self.hellinger_integral(&seq_a, &seq_b, &dists_a, &dists_b, w_func)
+    }
+
     /// Compares two structures with a given sequence pair of categories (seq_a and seq_b) 
     /// and a given distance matrix pair (dmx_a and dmx_b).
+    #[pyo3(signature = (seq_a, seq_b, dmx_a, dmx_b, w_func_keys = None))]
     fn from_dmxs(&self, 
         seq_a: Vec<String>, 
         seq_b: Vec<String>, 
         dmx_a: Vec<Vec<f64>>, 
-        dmx_b: Vec<Vec<f64>>) -> PyResult<Vec<f64>>
-    {
+        dmx_b: Vec<Vec<f64>>,
+        w_func_keys: Option<Vec<String>>
+    ) -> PyResult<Vec<f64>> {
 
-        // Check input validity.
+        // Check distance matrix length equivalence.
         if dmx_a.len() != dmx_b.len() {
 
             let err_msg = format!(
@@ -247,20 +337,27 @@ impl LoCoHD {
             return Err(PyValueError::new_err(err_msg));
         }
 
+        // Create the vector corresponding for the per-anchor WeightFunctions.
+        let w_func_vec = self.keys_to_weight_functions(&w_func_keys, dmx_a.len())?;
+
+        // Construct the LoCoHD parallel calculator closure.
         let run_calculation = || dmx_a
             .par_iter()
             .zip(&dmx_b)
-            .map(|(row_a, row_b)| {
+            .zip(w_func_vec)
+            .map(|((row_a, row_b), w_func)| {
                 let (current_dists_a, current_seq_a) = utils::sort_together(row_a, &seq_a);
                 let (current_dists_b, current_seq_b) = utils::sort_together(row_b, &seq_b);
-                self.from_anchors(current_seq_a, current_seq_b, current_dists_a, current_dists_b)
+                self.hellinger_integral(&current_seq_a, &current_seq_b, &current_dists_a, &current_dists_b, w_func)
             })
             .partition::<Vec<_>, Vec<_>, _>(Result::is_ok);
 
+        // Run calculations in parallel.
         let (output_ok, output_err) = self.thread_pool.install(run_calculation);
 
         if output_err.len() > 0 {
-            let err_msg = "The from_anchors function returned an error during the LoCoHD calculations!".to_owned();
+            let err_msg = "The hellinger_integral 
+                function returned an error during the LoCoHD calculations!".to_owned();
             return Err(PyValueError::new_err(err_msg));
         }
 
@@ -273,26 +370,43 @@ impl LoCoHD {
     /// Compares two structures with a given sequence pair of categories (coords_a and coords_b) 
     /// and a given coordinate-set pair (dmx_a and dmx_b). It calculates the distance matrices
     /// with the L2 (Euclidean) metric.
+    #[pyo3(signature = (seq_a, seq_b, coords_a, coords_b, w_func_keys = None))]
     fn from_coords(&self, 
         seq_a: Vec<String>, 
         seq_b: Vec<String>, 
         coords_a: Vec<[f64; 3]>, 
-        coords_b: Vec<[f64; 3]>) -> PyResult<Vec<f64>>
-    {
+        coords_b: Vec<[f64; 3]>,
+        w_func_keys: Option<Vec<String>>
+    ) -> PyResult<Vec<f64>> {
 
         let dmx_a = utils::calculate_distance_matrix(&coords_a);
         let dmx_b = utils::calculate_distance_matrix(&coords_b);
 
-        self.from_dmxs(seq_a, seq_b, dmx_a, dmx_b)
+        self.from_dmxs(seq_a, seq_b, dmx_a, dmx_b, w_func_keys)
     }
 
     /// Compares two structures with a given primitive atom sequence pair.
     fn from_primitives(&self, 
         prim_a: Vec<PrimitiveAtom>, 
         prim_b: Vec<PrimitiveAtom>, 
-        anchor_pairs: Vec<(usize, usize)>, 
-        threshold_distance: f64) -> PyResult<Vec<f64>>
-    {
+        anchor_pairs: AnchorPairSpecifier, 
+        threshold_distance: f64
+    ) -> PyResult<Vec<f64>> {
+
+        // Create the vector corresponding for the per-anchor WeightFunctions.
+        let (anchor_index_pairs, anchor_w_funcs) = match anchor_pairs {
+            AnchorPairSpecifier::WithWeightFunctionKey(triples) => {
+
+                let anchor_index_pairs = triples.iter().map(|x| (x.0, x.1)).collect::<Vec<_>>();
+                let w_func_keys = triples.into_iter().map(|x| x.2).collect::<Vec<_>>();
+                let target_len = w_func_keys.len();
+                (anchor_index_pairs, self.keys_to_weight_functions(&Some(w_func_keys), target_len)?)
+            },
+            AnchorPairSpecifier::WithoutWeightFunctionKey(pairs) => {
+                let target_len = pairs.len();
+                (pairs, self.keys_to_weight_functions(&None, target_len)?)
+            }
+        };
 
         // Build KdTrees from the first and second structures. Since the KdPoint trait is
         // implemented on the &PrimitiveAtom type (note the reference!) it is possible to
@@ -338,13 +452,14 @@ impl LoCoHD {
         };
 
         // This closure will calculate the environment LoCoHD scores paralelly for each anchor pair.
-        let run_calculation = || anchor_pairs
+        let run_calculation = || anchor_index_pairs
             .par_iter()
-            .map(|&(idx1, idx2)| {
+            .zip(anchor_w_funcs)
+            .map(|(&(idx1, idx2), w_func)| {
 
                 let (env_a_dists, env_a_seq) = env_from_idx(&prim_a, idx1, &kdtree_a);
                 let (env_b_dists, env_b_seq) = env_from_idx(&prim_b, idx2, &kdtree_b);
-                self.from_anchors(env_a_seq, env_b_seq, env_a_dists, env_b_dists)
+                self.hellinger_integral(&env_a_seq, &env_b_seq, &env_a_dists, &env_b_dists, w_func)
             })
             .partition::<Vec<_>, Vec<_>, _>(Result::is_ok);
 
@@ -352,7 +467,9 @@ impl LoCoHD {
         let (output_ok, output_err) = self.thread_pool.install(run_calculation);
 
         if output_err.len() > 0 {
-            let err_msg = "The from_anchors function returned an error during the LoCoHD calculations!".to_owned();
+            let err_msg = format!(
+                "The from_anchors function returned an error during the LoCoHD calculations!"
+            );
             return Err(PyValueError::new_err(err_msg));
         }
 

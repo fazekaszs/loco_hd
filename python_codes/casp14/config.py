@@ -13,7 +13,7 @@ SOURCE_DIR = Path(f"../../data_sources/{CASP_VERSION}")
 PRED_TAR_DIR = SOURCE_DIR / "predictions"
 REFS_TAR_DIR = SOURCE_DIR / "targets"
 
-_out_dir_name = f"{CASP_VERSION}_{PREDICTOR_KEY}_results"
+_out_dir_name = f"{PREDICTOR_KEY}_results"
 EXTRACTOR_OUTPUT_DIR = Path(f"../../workdir/{CASP_VERSION}") / _out_dir_name
 
 # To leave out structures from the analysis.

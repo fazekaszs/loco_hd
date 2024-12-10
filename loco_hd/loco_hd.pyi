@@ -133,7 +133,7 @@ class LoCoHD:
 
     def __init__(self, 
                 categories: List[str], 
-                w_func: Optional[WeightFunction] = None, 
+                w_func: Union[None, WeightFunction, Dict[str, WeightFunction]] = None, 
                 tag_pairing_rule: Optional[TagPairingRule] = None,
                 n_of_threads: Optional[int] = None) -> None:
         """
@@ -141,10 +141,12 @@ class LoCoHD:
 
         :param categories: The full set of the primitive types that can occur during calculations. When a primitive
           type that is not part of this list is encountered, the software throws an error.
-        :param w_func: Either ``None`` or a  ``WeightFunction`` instance. The weight function used inside the integral. 
+        :param w_func: Either ``None``, a  ``WeightFunction`` instance, or a dictionary of ``WeightFunctions``. 
+          The weight function used inside the integral. 
           It weights the cumulative contribution of the different primitive atoms within certain distances from 
           the anchor atom, i.e. the contribution of primitive atoms within the anchor atom's environment.
           When ``None``, it defaults to the ``WeightFunction("uniform", [3., 10.])`` case.
+          When it is a dictionary, different ``WeightFunction``s can be used for different anchor pairs.
         :param tag_pairing_rule: Either ``None`` or a  ``TagPairingRule`` instance. See the description of the 
           ``TagPairingRule`` class for what it does. When ``None``, it defaults to the
           ``TagPairingRule({"accept_same": True})`` case.
@@ -152,7 +154,12 @@ class LoCoHD:
           When ``None``, all the threads become available for the instance.
         """
 
-    def from_anchors(self, seq_a: List[str], seq_b: List[str], dists_a: VectorLike, dists_b: VectorLike) -> float:
+    def from_anchors(self, 
+                     seq_a: List[str], 
+                     seq_b: List[str], 
+                     dists_a: VectorLike, 
+                     dists_b: VectorLike,
+                     w_func_key: Optional[str] = None) -> float:
         """
         Performs one LoCoHD calculation step on two environments. These environments are defined by the
         primitive types they contain (in seq_a and seq_b) and by the distances measured from the central
@@ -165,6 +172,8 @@ class LoCoHD:
         :param seq_b: The primitive type sequence for the second environment.
         :param dists_a: The distances measured from the anchor atom for the first environment.
         :param dists_b: The distances measured from the anchor atom for the second environment.
+        :param w_func_key: The key if the LoCoHD instance was initiated with a WeightFunction dictionary (instead
+          of a single WeightFunction).
         :return: The calculated LoCoHD score.
         """
 
@@ -172,7 +181,8 @@ class LoCoHD:
                   seq_a: List[str],
                   seq_b: List[str],
                   dmx_a: MatrixLike,
-                  dmx_b: MatrixLike) -> List[float]:
+                  dmx_b: MatrixLike,
+                  w_func_keys: Optional[List[str]]) -> List[float]:
         """
         Performs LoCoHD calculations on the primitive atom distance matrices provided. Every row represents an
         (unordered) environment distance vector for a primitive atom. Also, every primitive atom is used as an
@@ -183,6 +193,8 @@ class LoCoHD:
         :param seq_b: The primitive type sequence for the second structure.
         :param dmx_a: The distance matrix of the first structure.
         :param dmx_b: The distance matrix of the second structure.
+        :param w_func_keys: The key list if the LoCoHD instance was initiated with a WeightFunction dictionary 
+          (instead of a single WeightFunction).
         :return: The list of LoCoHD scores.
         """
 
@@ -190,7 +202,8 @@ class LoCoHD:
                     seq_a: List[str],
                     seq_b: List[str],
                     coords_a: MatrixLike,
-                    coords_b: MatrixLike) -> List[float]:
+                    coords_b: MatrixLike,
+                    w_func_keys: Optional[List[str]]) -> List[float]:
         """
         Performs LoCoHD calculations on the primitive atom coordinates provided. It calculates the distance matrices
         with the L2 (Euclidean) metric.
@@ -199,13 +212,15 @@ class LoCoHD:
         :param seq_b: The primitive type sequence for the second structure.
         :param coords_a: The coordinate sequence for the first structure.
         :param coords_b: The coordinate sequence for the second structure.
+        :param w_func_keys: The key list if the LoCoHD instance was initiated with a WeightFunction dictionary 
+          (instead of a single WeightFunction).
         :return: The list of LoCoHD scores.
         """
 
     def from_primitives(self,
                         prim_a: List[PrimitiveAtom],
                         prim_b: List[PrimitiveAtom],
-                        anchor_pairs: List[Tuple[int, int]],
+                        anchor_pairs: Union[List[Tuple[int, int]], List[Tuple[int, int, str]]],
                         threshold_distance: float) -> List[float]:
         """
         Compares two structures with a given primitive atom sequence pair. This function can be used the most
@@ -214,7 +229,9 @@ class LoCoHD:
         :param prim_a: The primitive atom sequence of the first structure.
         :param prim_b: The primitive atom sequence of the second structure.
         :param anchor_pairs: The index-pairs of the anchor atoms, pointing to the corresponding primitive atom pairs
-            given in ``prim_a`` and ``prim_b``.
+            given in ``prim_a`` and ``prim_b``. If the LoCoHD instance was initiated with a dictionary-type ``w_func``
+            argument, then this argument must also contain keys for the different ``WeightFunction``s. In this case,
+            a list of 3-tuples ``(idx1, idx2, key)`` must be supplemented.
         :param threshold_distance: A distance above primitive atoms are not considered inside the environment
             of an anchor atom.
         :return: The list of LoCoHD scores.
