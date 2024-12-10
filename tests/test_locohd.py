@@ -3,7 +3,7 @@ from loco_hd import WeightFunction, LoCoHD, TagPairingRule
 import unittest
 
 
-class TestWeightFunctions(unittest.TestCase):
+class TestLoCoHDValues(unittest.TestCase):
 
     def test_small_locohd(self):
 
