@@ -43,6 +43,8 @@ pub struct LoCoHD {
     #[pyo3(get)]
     categories: HashMap<String, usize>,
     #[pyo3(get)]
+    category_weights: Vec<f64>,
+    #[pyo3(get)]
     w_func: WeightFunctionOptions,
     #[pyo3(get)]
     tag_pairing_rule: TagPairingRule,
@@ -73,7 +75,7 @@ impl LoCoHD {
 
         // Create the probability mass functions (PMFs) and add the first CAT-observations
         // to them (the first element from seq_a and seq_b).
-        let mut pmf_system = PMFSystem::new(&self.categories);
+        let mut pmf_system = PMFSystem::new(&self.categories, &self.category_weights);
         pmf_system.update_pmf1(&seq_a[0])?;
         pmf_system.update_pmf2(&seq_b[0])?;
 
@@ -255,13 +257,22 @@ impl LoCoHD {
 impl LoCoHD {
 
     #[new]
-    #[pyo3(signature = (categories, w_func=None, tag_pairing_rule=None, n_of_threads=None))]
+    #[pyo3(signature = (categories, w_func=None, tag_pairing_rule=None, n_of_threads=None, category_weights=None))]
     pub fn build(
         categories: Vec<String>, 
         w_func: Option<WeightFunctionOptions>, 
         tag_pairing_rule: Option<TagPairingRule>,
-        n_of_threads: Option<usize>
+        n_of_threads: Option<usize>,
+        category_weights: Option<Vec<f64>>
     ) -> PyResult<Self> {
+
+        // Check categories length validity
+        if categories.len() == 0 {
+            let err_msg = format!(
+                "The number of possible categories (primitive types) cannot be zero!"
+            );
+            return Err(PyValueError::new_err(err_msg));            
+        }
 
         // For faster lookup of the categories we use a HashMap instead of the supplied Vec.
         let categories: HashMap<_, _> = categories
@@ -269,6 +280,36 @@ impl LoCoHD {
             .enumerate()
             .map(|(a, b)| (b, a))
             .collect();
+
+        // Set default category_weights if necessary
+        let category_weights: Vec<f64> = match category_weights {
+            None => vec![1.0; categories.len()],
+            Some(v) => v
+        };
+
+        // Check category_weights length validity
+        if category_weights.len() != categories.len() {
+            let err_msg = format!(
+                "LoCoHD parameters 'categories' and 'category_weights' must have the same lengths! 
+                Instead, they have lengths of {} vs. {}!", 
+                categories.len(), category_weights.len()
+            );
+            return Err(PyValueError::new_err(err_msg));
+        }
+
+        // Check category_weights positivity validity
+        let non_positive_category_weights_len = category_weights.iter()
+            .filter(|&&x| x <= 0.0)
+            .collect::<Vec<_>>()
+            .len();
+        if non_positive_category_weights_len > 0 {
+            let err_msg = format!(
+                "LoCoHD parameter 'category_weights' must only contain positive values! 
+                Instead, it contains {} non-positive values!", 
+                non_positive_category_weights_len
+            );
+            return Err(PyValueError::new_err(err_msg));
+        }
 
         // Set default WeightFunctionOptions if necessary
         let w_func = match w_func {
@@ -295,7 +336,7 @@ impl LoCoHD {
                 return Err(PyValueError::new_err(err_msg));
             })?;
 
-        Ok(Self { categories, w_func, tag_pairing_rule, thread_pool })
+        Ok(Self { categories, category_weights, w_func, tag_pairing_rule, thread_pool })
     }
 
     /// Wrapper for the hellinger_integral function unavailable from Python.

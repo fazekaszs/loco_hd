@@ -9,17 +9,19 @@ use pyo3::{prelude::*, exceptions::PyValueError};
 /// two stored PMFs.
 pub struct PMFSystem<'a> {
     categories: &'a HashMap<String, usize>,
-    pmf1: Vec<usize>,
-    pmf2: Vec<usize>
+    category_weights: &'a Vec<f64>,
+    pmf1: Vec<f64>,
+    pmf2: Vec<f64>
 }
 
 impl<'a> PMFSystem<'a> {
 
-    pub fn new(categories: &HashMap<String, usize>) -> PMFSystem {
+    pub fn new(categories: &'a HashMap<String, usize>, category_weights: &'a Vec<f64>) -> PMFSystem<'a> {
         PMFSystem {
             categories,
-            pmf1: vec![0; categories.len()],
-            pmf2: vec![0; categories.len()]
+            category_weights,
+            pmf1: vec![0f64; categories.len()],
+            pmf2: vec![0f64; categories.len()]
         }
     }
 
@@ -40,7 +42,7 @@ impl<'a> PMFSystem<'a> {
 
         let category_idx = self.find_category_idx(category)?;
             
-        self.pmf1[category_idx] += 1;
+        self.pmf1[category_idx] += self.category_weights[category_idx];
 
         Ok(())
     }
@@ -49,15 +51,15 @@ impl<'a> PMFSystem<'a> {
 
         let category_idx = self.find_category_idx(category)?;
             
-        self.pmf2[category_idx] += 1;
+        self.pmf2[category_idx] += self.category_weights[category_idx];
 
         Ok(())
     }
 
     pub fn get_normalized_form(&self) -> PyResult<(Vec<f64>, Vec<f64>)> {
 
-        let norm1 = self.pmf1.iter().sum::<usize>() as f64;
-        let norm2 = self.pmf2.iter().sum::<usize>() as f64;
+        let norm1 = self.pmf1.iter().sum::<f64>();
+        let norm2 = self.pmf2.iter().sum::<f64>();
 
         if norm1 == 0f64 { 
             let err_msg = "Zero norm error for PMF1".to_owned();
@@ -68,8 +70,8 @@ impl<'a> PMFSystem<'a> {
         }
 
         Ok((
-            self.pmf1.clone().into_iter().map(|x| x as f64 / norm1).collect(),
-            self.pmf2.clone().into_iter().map(|x| x as f64 / norm2).collect()
+            self.pmf1.clone().into_iter().map(|x| x / norm1).collect(),
+            self.pmf2.clone().into_iter().map(|x| x / norm2).collect()
         ))
 
     }

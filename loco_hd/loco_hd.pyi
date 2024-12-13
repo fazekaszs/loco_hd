@@ -135,7 +135,9 @@ class LoCoHD:
                 categories: List[str], 
                 w_func: Union[None, WeightFunction, Dict[str, WeightFunction]] = None, 
                 tag_pairing_rule: Optional[TagPairingRule] = None,
-                n_of_threads: Optional[int] = None) -> None:
+                n_of_threads: Optional[int] = None,                
+                category_weights: Optional[List[float]] = None,
+        ) -> None:
         """
         The constructor of the ``LoCoHD`` class.
 
