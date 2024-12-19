@@ -6,6 +6,7 @@ import unittest
 class TestWeightFunctions(unittest.TestCase):
 
     def test_hyper_exp_ok(self):
+        """Test the hyper-exponential weight function with correct parameters and integral assertions."""
 
         wf = WeightFunction("hyper_exp", [1., 1.])
 
@@ -26,6 +27,7 @@ class TestWeightFunctions(unittest.TestCase):
         self.assertAlmostEqual(wf.integral_range(5., 10.), 0.2100, places=4)
 
     def test_hyper_exp_err(self):
+        """Test the hyper-exponential weight function with incorrect parameters."""
 
         with self.assertRaises(ValueError):
             WeightFunction("hyper_exp", [1., ])
@@ -43,6 +45,7 @@ class TestWeightFunctions(unittest.TestCase):
             WeightFunction("hyper_exp", [1., -1., 2.])
 
     def test_dagum_ok(self):
+        """Test the Dagum weight function with correct parameters and integral assertions."""
 
         wf = WeightFunction("dagum", [1., 1., 1.])
 
@@ -63,6 +66,7 @@ class TestWeightFunctions(unittest.TestCase):
         self.assertAlmostEqual(wf.integral_range(5., 10.), 0.7480, places=4)
 
     def test_dagum_err(self):
+        """Test the Dagum weight function with incorrect parameters."""
 
         with self.assertRaises(ValueError):
             WeightFunction("dagum", [1., ])
@@ -80,6 +84,7 @@ class TestWeightFunctions(unittest.TestCase):
             WeightFunction("dagum", [1., 2., -3.])
 
     def test_uniform_ok(self):
+        """Test the uniform weight function with correct parameters and integral assertions."""
 
         wf = WeightFunction("uniform", [0., 1.])
 
@@ -100,6 +105,7 @@ class TestWeightFunctions(unittest.TestCase):
         self.assertAlmostEqual(wf.integral_range(5., 10.), 0.3571, places=4)        
 
     def test_uniform_err(self):
+        """Test the uniform weight function with incorrect parameters."""
 
         with self.assertRaises(ValueError):
             WeightFunction("uniform", [1., ])
@@ -111,6 +117,7 @@ class TestWeightFunctions(unittest.TestCase):
             WeightFunction("uniform", [-1., 0.])
 
     def test_kumaraswamy_ok(self):
+        """Test the Kumaraswamy weight function with correct parameters and integral assertions."""
 
         wf = WeightFunction("kumaraswamy", [1., 2., 2., 2.])
 
@@ -129,6 +136,24 @@ class TestWeightFunctions(unittest.TestCase):
         self.assertAlmostEqual(wf.integral_range(5., 7.), 0.0534, places=4)
         self.assertAlmostEqual(wf.integral_range(1., 17.), 1.0000, places=4)
         self.assertAlmostEqual(wf.integral_range(6.4, 6.7), 0.0129, places=4)
+
+    def test_kumaraswamy_err(self):
+        """Test the Kumaraswamy weight function with incorrect parameters."""
+
+        with self.assertRaises(ValueError):
+            WeightFunction("kumaraswamy", [1., ])
+
+        with self.assertRaises(ValueError):
+            WeightFunction("kumaraswamy", [1., 2.])
+
+        with self.assertRaises(ValueError):
+            WeightFunction("kumaraswamy", [3., 1., 2., 2.])
+
+        with self.assertRaises(ValueError):
+            WeightFunction("kumaraswamy", [1., 3., -2., 2.])
+
+        with self.assertRaises(ValueError):
+            WeightFunction("kumaraswamy", [0., 3., 2., -2.])
 
 
 if __name__ == "__main__":
