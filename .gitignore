@@ -76,3 +76,6 @@ workdir/
 data_sources/
 ring-3.0.0/
 old/
+
+# Rust
+Cargo.lock
