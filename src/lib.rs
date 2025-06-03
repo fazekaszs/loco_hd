@@ -1,5 +1,8 @@
 mod locohd;
-pub use locohd::{WeightFunction, PrimitiveAtom, LoCoHD, TagPairingRule};
+pub use locohd::{
+    WeightFunction, PrimitiveAtom, LoCoHD, 
+    TagPairingRule, StatisticalDistance
+};
 
 use pyo3::prelude::*;
 
@@ -8,6 +11,7 @@ fn loco_hd(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<WeightFunction>()?;
     m.add_class::<PrimitiveAtom>()?;
     m.add_class::<TagPairingRule>()?;
+    m.add_class::<StatisticalDistance>()?;
     m.add_class::<LoCoHD>()?;
     Ok(())
 }

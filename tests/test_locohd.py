@@ -1,5 +1,7 @@
 from loco_hd import WeightFunction, LoCoHD, PrimitiveAtom
 
+import os
+import time
 import numpy as np
 import unittest
 import pickle
@@ -7,6 +9,20 @@ from pathlib import Path
 
 
 class TestLoCoHDValues(unittest.TestCase):
+
+    def setUp(self):
+
+        self.t_build_list = list()
+        self.t_run_list = list()
+        self.measure_times = False
+
+    def tearDown(self):
+
+        if not self.measure_times:
+            return
+
+        print(f"Total build time in test_consistency: {sum(self.t_build_list)} s")
+        print(f"Total run time in test_consistency: {sum(self.t_run_list)} s")
 
     def test_small_locohd(self):
         """Small LoCoHD calculations using the from_anchors method and hand-calculated test-cases."""
@@ -56,9 +72,11 @@ class TestLoCoHDValues(unittest.TestCase):
         with self.assertRaises(ValueError):
             LoCoHD(primitive_types, w_func, category_weights=[1., 0., 1., 1.])
 
+    @unittest.skipIf(os.getenv("CONSISTENCY") is None, reason="CONSISTENCY test is not requested.")
     def test_consistency(self):
         """Large LoCoHD calculations using the from_primitives method and auto-generated test-cases."""
 
+        self.measure_times = True
         data_dir = Path("tests/test_data")
         datafile_date = "241212_131752"
 
@@ -77,8 +95,17 @@ class TestLoCoHDValues(unittest.TestCase):
             anchors = [(x, x) for x in range(min(len(pras1), len(pras2)))]
 
             w_func = WeightFunction(*input_collection["weight_functions"][idx_wf])
+
+            t_build = time.time()
             lchd = LoCoHD(input_collection["primitive_types"], w_func)
+            t_build = time.time() - t_build
+            self.t_build_list.append(t_build)
+
+            t_run = time.time()
             scores = lchd.from_primitives(pras1, pras2, anchors, input_collection["threshold_distance"])
+            t_run = time.time() - t_run
+            self.t_run_list.append(t_run)
+
             current_results = (
                 np.mean(scores),
                 np.median(scores),

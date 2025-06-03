@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 use pyo3::{prelude::*, exceptions::PyValueError};
 
+mod statistical_distances;
+pub use statistical_distances::StatisticalDistance;
+
 /// The Probability Mass Function System is used to capture the
 /// LoCoHD primitive types ("categories" to avoid confusion with
 /// the programming primitive types) and to implement the logic
@@ -16,7 +19,10 @@ pub struct PMFSystem<'a> {
 
 impl<'a> PMFSystem<'a> {
 
-    pub fn new(categories: &'a HashMap<String, usize>, category_weights: &'a Vec<f64>) -> PMFSystem<'a> {
+    pub fn new(
+        categories: &'a HashMap<String, usize>, 
+        category_weights: &'a Vec<f64>
+    ) -> PMFSystem<'a> {
         PMFSystem {
             categories,
             category_weights,
@@ -76,17 +82,8 @@ impl<'a> PMFSystem<'a> {
 
     }
 
-    pub fn hellinger_dist(&self) -> PyResult<f64> {
-
+    pub fn calculate_distance(&self, statistical_distance: &StatisticalDistance) -> PyResult<f64> {
         let (p1, p2) = self.get_normalized_form()?;
-
-        let dist = p1
-            .iter()
-            .zip(&p2)
-            .map(|(x, y)| (x.sqrt() - y.sqrt()).powf(2f64))
-            .sum::<f64>();
-
-        Ok((dist / 2f64).sqrt())
+        statistical_distance.run(p1, p2)
     }
-
 }
