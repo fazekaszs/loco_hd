@@ -1,5 +1,5 @@
 [build-system]
-requires = ["maturin>=0.13"]
+requires = ["maturin>=1.7"]
 build-backend = "maturin"
 
 [project]
@@ -9,7 +9,7 @@ authors = [
     { name = "Zsolt Fazekas", email = "zsolt.fazekas.9@gmail.com" }
 ]
 description = "Implementation of the LoCoHD metric for quantitative protein structure and substructure comparison"
-requires-python = ">=3.7"
+requires-python = ">=3.12"
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
