@@ -364,7 +364,7 @@ impl LoCoHD {
         // Set the default StatisticalDistance options if necessary.
         let statistical_distance = match statistical_distance {
             None => StatisticalDistance::build(
-                "Hellinger".to_owned(), vec![2f64]
+                "Hellinger".to_owned(), vec![2.]
             )?,
             Some(v) => v
         };
