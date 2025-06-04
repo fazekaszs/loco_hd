@@ -120,6 +120,50 @@ class TagPairingRule:
         Prints out the string representing the rule.
         """
 
+class StatisticalDistance:
+    """
+    A class that defines a certain statistical distance.
+    """
+    def __init__(self, distance_name: str, parameters: List[float]) -> None:
+        """
+        The constructor for the ``StatisticalDistance`` class.
+        The ``distance_name`` argument is a string specifying the name of the chosen statistical distance,
+        while the ``parameters`` argument is a list of floats specifying the parameters belonging to that
+        specific distance.
+        Note that different statistical distances accept different number of parameters.
+        The currently supported statistical distance names are the following:
+
+        - ``"Hellinger"`` (parameters: ``[exponent]``): a generalized version of the Hellinger-distance with a
+          general p-norm (p is the exponent).
+          It is a proper metric.
+        - ``"Kolmogorov-Smirnov"`` (parameters: ``[]``): the total variation distance (also used as the
+          statistics in the Kolmogorov-Smirnov test).
+          It is not parametrized.
+          It is a proper metric.
+        - ``"Kullback-Leibler"`` (parameters: ``[epsilon]``): the KL divergence,
+          except that it is the expectation of ``ln((p1(i) + epsilon) / (p2(i) + epsilon))`` under p1.
+          This means that epsilon prevents situations like log(0) and 1 / 0.
+          It is not a metric, since it is not symmetric!
+          However, it is a divergence.
+        - ``"Renyi"`` (parameters: ``[alpha, epsilon]``): a generalization of the KL divergence with an extra
+          parameter ``alpha``.
+
+        :param distance_name: The name of the chosen statistical distance.
+        :param parameters: The parameters of the statistical distance.
+          Different statistical distances take different number of parameters!
+        """
+
+    def run(self, p1: List[float], p2: List[float]) -> float:
+        """
+        Calculates the statistical distance between two normalized lists of floats
+        (i.e., between two probability mass functions = PMFs).
+        For some statistical distances, the order of the two PMFs matters!
+
+        :param p1: The first PMF.
+        :param p2: The second PMF.
+        :return: The statistical distance.
+        """
+
 class LoCoHD:
     """
     The main class used to perform the LoCoHD calculations.
@@ -137,6 +181,7 @@ class LoCoHD:
                 tag_pairing_rule: Optional[TagPairingRule] = None,
                 n_of_threads: Optional[int] = None,                
                 category_weights: Optional[List[float]] = None,
+                statistical_distance: Optional[StatisticalDistance] = None
         ) -> None:
         """
         The constructor of the ``LoCoHD`` class.
@@ -148,12 +193,18 @@ class LoCoHD:
           It weights the cumulative contribution of the different primitive atoms within certain distances from 
           the anchor atom, i.e. the contribution of primitive atoms within the anchor atom's environment.
           When ``None``, it defaults to the ``WeightFunction("uniform", [3., 10.])`` case.
-          When it is a dictionary, different ``WeightFunction``s can be used for different anchor pairs.
+          When it is a dictionary, different ``WeightFunction`` s can be used for different anchor pairs.
         :param tag_pairing_rule: Either ``None`` or a  ``TagPairingRule`` instance. See the description of the 
           ``TagPairingRule`` class for what it does. When ``None``, it defaults to the
           ``TagPairingRule({"accept_same": True})`` case.
         :param n_of_threads: Either ``None`` or an integer. The number of threads the instance is allowed to use.
           When ``None``, all the threads become available for the instance.
+        :param category_weights: By default, each category (primitive type) weights the same amount in an
+          environment, meaning that the assigned probability mass ratio of two primitive types is the ratio
+          of their counts in the environment. However, this can be modified by specifying different weights
+          for different primitive types.
+        :param statistical_distance: The statistical distance used for the LoCoHD calculation. By default,
+          it is the Hellinger-distance (with exponent = 2).
         """
 
     def from_anchors(self, 
