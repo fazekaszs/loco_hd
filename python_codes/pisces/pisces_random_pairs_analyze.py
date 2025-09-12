@@ -46,119 +46,13 @@ RESI_PROPERTIES = {
     "LYS": ["-", "LYS", "positive", "non-aromatic", "hydrophilic", "large", "intermediate", "intermediate"],
     "PRO": ["-", "PRO", "neutral", "non-aromatic", "hydrophilic", "small", "low", "low"]
 }
-DATA_SOURCE_DIR = Path("../../workdir/pisces")
-DATA_SOURCE_NAME = "run_2023-02-08-12-50-23"
+DATA_SOURCE_DIR = Path("../../workdir/pisces/Examples_book")
+DATA_SOURCE_NAME = "250912_KL-1E-10_CGCent_U-3-10"
+FIT_BETA = False
 MM_TO_INCH = 0.0393701
 
-
-class AdvancedWelfordStatistics:
-    """
-    Creates an object capable to collect statistics from a stream of data i.e.,
-    updates and keeps track of the following descriptors in an online manner:
-    - the number of samples seen
-    - the mean of the samples (estimate)
-    - the median of the samples (estimate)
-    - the variance of the samples (estimate)
-    - the minimum of the samples (exact)
-    - the maximum of the samples (exact)
-
-    It uses the Welford online algorithm for this. The samples are stored in a buffer
-    vector, until the vector reaches its capacity. When it does, the descriptors are
-    updated and the buffer vector is flushed. The higher the capacity, the more accurate
-    are the estimated descriptors, but the slower the algorithm.
-
-    Also, samples are added as tuples: the first two elements of the tuples are residue
-    data in the form of "[PDB ID]/[chain ID]/[residue number]-[residue type]" strings. The
-    third element is the measured LoCoHD score between the two residue environments.
-    """
-
-    def __init__(self, capacity: int = 1_000_000):
-
-        self.capacity: int = capacity
-        self.n_of_samples: int = 0
-        self.buffer: List[Tuple[str, str, float]] = list()
-        self.mean: float = 0
-        self.full_var: float = 0
-        self.min: Tuple[str, str, float] = ("", "", float("inf"))
-        self.max: Tuple[str, str, float] = ("", "", float("-inf"))
-
-        # This only estimates the median!
-        self.medians: List[Tuple[str, str, float]] = list()
-
-    def collapse(self):
-        """
-        Updates the statistical descriptors based on the data inside the buffer
-        vector and then flushes the buffer.
-        """
-
-        # Each element is an (id1: str, id2: str, locohd: float) tuple in 'self.buffer'.
-        buffer_array = np.array([element[2] for element in self.buffer])
-
-        # Update the number of samples.
-        self.n_of_samples += len(buffer_array)
-
-        # Update the mean with the online algorithm:
-        # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Online
-        # This is a modification of the algorithm described above.
-        # Here, we add 'len(self.buffer)' number of samples each time.
-        old_mean = self.mean
-        self.mean = old_mean + (np.sum(buffer_array) - len(self.buffer) * old_mean) / self.n_of_samples
-
-        # Update the squared deviation from the mean.
-        self.full_var += np.sum((buffer_array - self.mean) * (buffer_array - old_mean))
-
-        # Update the min value.
-        current_min_idx = np.argmin(buffer_array)
-        current_min = buffer_array[current_min_idx]
-        if current_min < self.min[2]:
-            self.min = self.buffer[current_min_idx]
-
-        # Update the max value.
-        current_max_idx = np.argmax(buffer_array)
-        current_max = buffer_array[current_max_idx]
-        if current_max > self.max[2]:
-            self.max = self.buffer[current_max_idx]
-
-        # Update the medians.
-        self.medians += self.buffer
-        self.medians.sort(key=lambda x: x[2])
-        lower_cut = max((0, (len(self.medians) - self.capacity) // 2))
-        upper_cut = min((len(self.medians), (len(self.medians) + self.capacity) // 2))
-        self.medians = self.medians[lower_cut:upper_cut]
-
-        # Clean up the buffer.
-        self.buffer = list()
-
-    def update(self, value: Tuple[str, str, float]):
-        """
-        Adds a new element to the buffer vector and then calls collapse if the length
-        of the buffer vector exceeds the capacity.
-        :param value: A new sample from the LoCoHD distribution along with the LoCoHD source
-         (residue environment identifiers).
-        """
-
-        self.buffer.append(value)
-
-        if len(self.buffer) == self.capacity:
-            self.collapse()
-
-    def get_stat(self):
-
-        self.collapse()
-
-        std = math.sqrt(self.full_var / self.n_of_samples)
-        median = self.medians[len(self.medians) // 2]
-
-        out = {
-            "number of samples": self.n_of_samples,
-            "mean": self.mean,
-            "median": median,
-            "standard deviation": std,
-            "minimum": self.min,
-            "maximum": self.max
-        }
-
-        return out
+def arg_median(x):
+    return np.argpartition(x, len(x) // 2)[len(x) // 2]
 
 
 def generate_statistics(data: List[Tuple[str, str, float]]) -> List[Dict[Tuple[str, str], Dict[str, Any]]]:
@@ -172,8 +66,7 @@ def generate_statistics(data: List[Tuple[str, str, float]]) -> List[Dict[Tuple[s
     # statistics is a list of dictionaries. Each element corresponds to a certain
     #  property category from PROPERTY_NAMES (e.g. hydrophobicity). The keys of the
     #  dictionaries are property pairs for the given category (e.g. hydrophilic-hydrophobic,
-    #  hydrophobic-hydroneutral, etc...). The values are AdvancedWelfordStatistics instances,
-    #  that keep track of the statistical descriptors of the samples.
+    #  hydrophobic-hydroneutral, etc...). The values are lists, that keep track of the observations.
     statistics = [dict() for _ in PROPERTY_NAMES]
 
     for progress, element in enumerate(data):
@@ -193,15 +86,35 @@ def generate_statistics(data: List[Tuple[str, str, float]]) -> List[Dict[Tuple[s
             key = (prop1, prop2) if prop1 > prop2 else (prop2, prop1)  # make it unambiguous
 
             if key not in statistics[idx]:
-                statistics[idx][key] = AdvancedWelfordStatistics()
+                statistics[idx][key] = list()
 
-            statistics[idx][key].update(element)
+            statistics[idx][key].append(element)
 
     # Convert from AdvancedWelfordStatistics to exact statistical descriptors.
     for category_stat in statistics:
 
         for cat_key in category_stat:
-            category_stat[cat_key] = category_stat[cat_key].get_stat()
+
+            scores = np.array([x[2] for x in category_stat[cat_key]])
+
+            cat_len = len(scores)
+            cat_mean = np.mean(scores)
+            cat_std = np.std(scores, mean=cat_mean)
+            cat_arg_median = arg_median(scores)
+            cat_median = category_stat[cat_key][cat_arg_median]
+            cat_arg_min = np.argmin(scores)
+            cat_min = category_stat[cat_key][cat_arg_min]
+            cat_arg_max = np.argmax(scores)
+            cat_max = category_stat[cat_key][cat_arg_max]
+
+            category_stat[cat_key] = {
+                "number of samples": cat_len,
+                "mean": cat_mean,
+                "median": cat_median,
+                "standard deviation": cat_std,
+                "minimum": cat_min,
+                "maximum": cat_max
+            }
 
     print()
     return statistics
@@ -260,7 +173,7 @@ def stat_to_tsvs(statistics: List[Dict[Tuple[str, str], Dict[str, Any]]]) -> Lis
     return output
 
 
-def fit_beta_to_samples(lchd_values: List[float]):
+def fit_beta_to_samples(lchd_values: List[float], analysis_dir_path: Path):
 
     def beta_cdf(x, *params) -> float:
         return beta_dist.cdf(x, a=params[0], b=params[1])
@@ -270,9 +183,27 @@ def fit_beta_to_samples(lchd_values: List[float]):
 
     start_params = [2., 2.]
     bound_params = ([0., 0.], [1E5, 1E5])
-    fit_results = curve_fit(beta_cdf, x_values, y_values, p0=start_params, bounds=bound_params)
+    fit_results = curve_fit(beta_cdf, x_values, y_values, p0=start_params, bounds=bound_params)[0]
 
-    return fit_results[0]
+    out_str = ""
+    out_str += f"Beta distribution parameters:\n"
+    out_str += f"\talpha = {fit_results[0]:.5f}\n"
+    out_str += f"\tbeta = {fit_results[1]:.5f}\n"
+
+    kstest_result = kstest(lchd_values, lambda x: beta_dist.cdf(x, *fit_results))
+    out_str += f"Kolmogorov-Smirnov test result:\n"
+    out_str += f"\tstatistics = {kstest_result[0]}\n"
+    out_str += f"\tp-value = {kstest_result[1]}\n"
+
+    with open(analysis_dir_path / "fitting_params.txt", "w") as f:
+        f.write(out_str)
+
+    print(out_str)
+
+    # Plotting the full distribution histogram, along with the fitted beta distribution PDF.
+    print("Beta-distribution fitted and saved!")
+
+    return fit_results
 
 
 def main():
@@ -291,7 +222,6 @@ def main():
     tsvs = stat_to_tsvs(statistics)
 
     # Saving the statistics.
-
     print("tsvs created! Saving tsv tables...")
     analysis_dir_path = DATA_SOURCE_DIR / DATA_SOURCE_NAME / "analysis"
     if not os.path.exists(analysis_dir_path):
@@ -301,29 +231,9 @@ def main():
         with open(analysis_dir_path / f"{prop_name}_statistics.tsv", "w") as f:
             f.write(tsv_data)
 
-    # Fitting a beta-distribution to the data
-    print("tsv tables saved! Fitting beta-distribution...")
+    # Plotting
     lchd_scores = list(map(lambda x: x[2], data))
-
-    beta_params = fit_beta_to_samples(lchd_scores)
-
-    out_str = ""
-    out_str += f"Beta distribution parameters:\n"
-    out_str += f"\talpha = {beta_params[0]:.5f}\n"
-    out_str += f"\tbeta = {beta_params[1]:.5f}\n"
-
-    kstest_result = kstest(lchd_scores, lambda x: beta_dist.cdf(x, *beta_params))
-    out_str += f"Kolmogorov-Smirnov test result:\n"
-    out_str += f"\tstatistics = {kstest_result[0]}\n"
-    out_str += f"\tp-value = {kstest_result[1]}\n"
-
-    with open(analysis_dir_path / "fitting_params.txt", "w") as f:
-        f.write(out_str)
-
-    print(out_str)
-
-    # Plotting the full distribution histogram, along with the fitted beta distribution PDF.
-    print("Beta-distribution fitted and saved! Starting to plot...")
+    print("Starting to plot...")
 
     plt.rcParams["font.size"] = 7
     plt.rcParams["font.family"] = "Arial"
@@ -332,41 +242,50 @@ def main():
 
     fig, ax = plt.subplots()
 
-    ax.hist(
-        lchd_scores,
-        bins=100, density=True, label="experimental distribution"
-    )
-
-    plot_x = np.arange(0, 1 + 0.01, 0.01)
-    fitted_beta_y = beta_dist.pdf(plot_x, *beta_params)
-    fitted_beta_height = np.max(fitted_beta_y)
-    plot_y_ticks = np.arange(0, fitted_beta_height * 2, fitted_beta_height * 2 / 10)
-
+    # Histogram, boxplot, median text
+    hist_lchd_y, hist_lchd_x = np.histogram(lchd_scores, bins=100, density=True)
+    hist_lchd_x = (hist_lchd_x[1:] + hist_lchd_x[:-1]) / 2
+    hist_max_y = np.max(hist_lchd_y)
     ax.plot(
-        plot_x, fitted_beta_y,
-        alpha=0.7, label="fitted $\\beta$-distribution"
+        hist_lchd_x, hist_lchd_y,
+        label="experimental distribution",
+        color="blue"
     )
+
     box_dict = ax.boxplot(
         lchd_scores,
-        positions=[fitted_beta_height * 1.3, ],
-        widths=[fitted_beta_height * 0.1, ],
+        positions=[hist_max_y * 1.3, ],
+        widths=[hist_max_y * 0.1, ],
         vert=False, showfliers=False, manage_ticks=False
     )
-
     box_dict["medians"][0].set_color("blue")
     median_line_top = box_dict["medians"][0].get_xydata()[1, :]
+
     ax.text(
         median_line_top[0], median_line_top[1],
-        f"median: {median_line_top[0]:.2%}",
+        f"median:\n{median_line_top[0]:.5f}",
         ha="center", va="bottom",
     )
 
+    # Beta distribution fitting, if needed
+    if FIT_BETA:
+
+        print("tsv tables saved! Fitting beta-distribution...")
+        beta_params = fit_beta_to_samples(lchd_scores, analysis_dir_path)
+        beta_plot_x = np.arange(0, 1 + 0.01, 0.01)
+        beta_plot_y = beta_dist.pdf(beta_plot_x, *beta_params)
+        ax.plot(
+            beta_plot_x, beta_plot_y,
+            alpha=0.7, label="fitted $\\beta$-distribution"
+        )
+
     ax.legend(loc="upper right")
-    ax.set_xlabel("LoCoHD score")
+    ax.set_xlabel("LoCoSD score")
     ax.set_ylabel("Density")
 
-    x_ticks = np.arange(0, 1 + 0.2, 0.2)
-    ax.set_xticks(x_ticks, [f"{x:.0%}" for x in x_ticks])
+    # x_ticks = np.arange(0, 1 + 0.2, 0.2)
+    # ax.set_xticks(x_ticks, [f"{x:.0%}" for x in x_ticks])
+    plot_y_ticks = np.arange(0, hist_max_y * 2, hist_max_y * 2 / 10)
     ax.set_yticks(plot_y_ticks)
 
     fig.set_size_inches(88 * MM_TO_INCH, 88 * MM_TO_INCH)

@@ -15,17 +15,22 @@ from scipy import stats
 from Bio.PDB.PDBParser import PDBParser
 from Bio.PDB.Model import Model
 
-from loco_hd import LoCoHD, PrimitiveAtom, WeightFunction, PrimitiveAssigner, PrimitiveAtomTemplate, TagPairingRule
+from loco_hd import (
+    LoCoHD, PrimitiveAtom, WeightFunction,
+    PrimitiveAssigner, PrimitiveAtomTemplate, TagPairingRule,
+    StatisticalDistance
+)
 
 CURRENT_TIME = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
 OUTPUT_FILENAME = "locohd_data.pisces"
 WORKDIR_TARGET = Path("../workdir/pisces")
 ASSIGNER_CONFIG_PATH = Path("../primitive_typings/coarse_grained_with_centroid.config.json")
-PISCES_DIR_PATH = Path("../../../PycharmProjects/databases/pisces_220222")
+PISCES_DIR_PATH = Path("../../../PycharmProjects/databases/pisces_241209")
 RANDOM_SEED = 1994
 MAX_N_OF_ANCHORS = 1500
-WEIGHT_FUNCTION = ("uniform", [3, 10, ])
+WEIGHT_FUNCTION = ("uniform", [3, 10])
 TAG_PAIRING_RULE = TagPairingRule({"accept_same": False})
+STATISTICAL_DISTANCE = StatisticalDistance("Kullback-Leibler", [1E-10, ])
 UPPER_CUTOFF = 10
 
 
@@ -76,7 +81,12 @@ def main():
     # Initialize the assigner and locohd
     primitive_assigner = PrimitiveAssigner(ASSIGNER_CONFIG_PATH)
     weight_function = WeightFunction(*WEIGHT_FUNCTION)
-    lchd = LoCoHD(primitive_assigner.all_primitive_types, weight_function, TAG_PAIRING_RULE)
+    lchd = LoCoHD(
+        categories=primitive_assigner.all_primitive_types,
+        w_func=weight_function,
+        tag_pairing_rule=TAG_PAIRING_RULE,
+        statistical_distance=STATISTICAL_DISTANCE
+    )
 
     # Collect the PDB file names
     pdb_files: List[str] = os.listdir(PISCES_DIR_PATH)
