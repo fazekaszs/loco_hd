@@ -1,4 +1,4 @@
-from loco_hd import WeightFunction, LoCoHD, PrimitiveAtom
+from loco_hd import WeightFunction, LoCoHD, PrimitiveAtom, StatisticalDistance
 
 import os
 import time
@@ -78,7 +78,7 @@ class TestLoCoHDValues(unittest.TestCase):
 
         self.measure_times = True
         data_dir = Path("tests/test_data")
-        datafile_date = "241212_131752"
+        datafile_date = "250605_114749"
 
         with open(data_dir / f"test_input_collection_{datafile_date}.pickle", "rb") as f:
             input_collection = pickle.load(f)
@@ -86,7 +86,16 @@ class TestLoCoHDValues(unittest.TestCase):
         with open(data_dir / f"test_output_collection_{datafile_date}.pickle", "rb") as f:
             output_collection = pickle.load(f)
 
-        for idx_wf, idx1, idx2 in output_collection:
+        for indices in output_collection:
+
+            if len(indices) == 3:
+                idx_wf, idx1, idx2 = indices
+                sd = StatisticalDistance("Hellinger", [2., ])
+            elif len(indices) == 4:
+                idx_wf, idx_sd, idx1, idx2 = indices
+                sd = StatisticalDistance(*input_collection["statistical_distances"][idx_sd])
+            else:
+                raise Exception("Invalid number of indices stored in the output collection!")
 
             scp1 = input_collection["sequence_coordinate_pairs"][idx1]
             scp2 = input_collection["sequence_coordinate_pairs"][idx2]
@@ -97,7 +106,11 @@ class TestLoCoHDValues(unittest.TestCase):
             w_func = WeightFunction(*input_collection["weight_functions"][idx_wf])
 
             t_build = time.time()
-            lchd = LoCoHD(input_collection["primitive_types"], w_func)
+            lchd = LoCoHD(
+                categories=input_collection["primitive_types"],
+                w_func=w_func,
+                statistical_distance=sd
+            )
             t_build = time.time() - t_build
             self.t_build_list.append(t_build)
 
@@ -114,7 +127,7 @@ class TestLoCoHDValues(unittest.TestCase):
                 np.max(scores)                
             )
 
-            target_results = output_collection[(idx_wf, idx1, idx2)]
+            target_results = output_collection[indices]
 
             for target, current in zip(target_results, current_results):
                 self.assertAlmostEqual(target, current, places=15)
