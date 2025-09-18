@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "loco_hd"
-version = "0.1.4"
+version = "0.2.0"
 authors = [
     { name = "Zsolt Fazekas", email = "zsolt.fazekas.9@gmail.com" }
 ]
