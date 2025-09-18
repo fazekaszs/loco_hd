@@ -47,8 +47,8 @@ RESI_PROPERTIES = {
     "PRO": ["-", "PRO", "neutral", "non-aromatic", "hydrophilic", "small", "low", "low"]
 }
 DATA_SOURCE_DIR = Path("../../workdir/pisces/Examples_book")
-DATA_SOURCE_NAME = "250912_KL-1E-10_CGCent_U-3-10"
-FIT_BETA = False
+DATA_SOURCE_NAME = "250917_KS_CGCent_K-3-10-3-6"
+FIT_BETA = True
 MM_TO_INCH = 0.0393701
 
 def arg_median(x):
@@ -206,6 +206,77 @@ def fit_beta_to_samples(lchd_values: List[float], analysis_dir_path: Path):
     return fit_results
 
 
+def plot_results(lchd_scores: List[float], analysis_dir_path: Path):
+
+    plt.rcParams["font.size"] = 7
+    plt.rcParams["font.family"] = "Arial"
+    plt.rcParams["figure.subplot.left"] = 0.2
+    plt.rcParams["figure.subplot.right"] = 0.8
+    plt.rcParams["figure.subplot.bottom"] = 0.15
+
+    fig, ax = plt.subplots()
+
+    # Histogram, boxplot, median text
+    ax.set_xlabel("LoCoSD score")
+    ax.set_ylabel("Count", color="blue")
+
+    hist_lchd_y, hist_lchd_x = np.histogram(lchd_scores, bins=100, density=False)
+    hist_lchd_x = (hist_lchd_x[1:] + hist_lchd_x[:-1]) / 2
+    hist_max_y = np.max(hist_lchd_y)
+    ax.plot(
+        hist_lchd_x, hist_lchd_y,
+        label="experimental distribution",
+        color="blue"
+    )
+
+    box_dict = ax.boxplot(
+        lchd_scores,
+        positions=[hist_max_y * 1.1, ],
+        widths=[hist_max_y * 0.05, ],
+        vert=False, showfliers=False, manage_ticks=False
+    )
+    box_dict["medians"][0].set_color("blue")
+    median_line_top = box_dict["medians"][0].get_xydata()[1, :]
+
+    ax.text(
+        median_line_top[0], median_line_top[1] + hist_max_y * 0.02,
+        f"median:\n{median_line_top[0]:.5f}",
+        ha="center", va="bottom",
+                            )
+
+    # Plot CDF too
+    ax_cdf = ax.twinx()
+    ax_cdf.set_ylabel("Cumulative Density", color="red")
+    hist_lchd_y_cdf = np.cumsum(hist_lchd_y)
+    hist_lchd_y_cdf = hist_lchd_y_cdf / hist_lchd_y_cdf[-1]
+    ax_cdf.plot(
+        hist_lchd_x,  hist_lchd_y_cdf,
+        label="experimental cumulative distribution",
+        color="red"
+    )
+    ax_cdf.set_yticks(np.arange(0, 1.5 + 0.01, 0.25))
+    ax_cdf.set_ylim(0, 1.5)
+
+    # Beta distribution fitting, if needed
+    if FIT_BETA:
+
+        print("tsv tables saved! Fitting beta-distribution...")
+        beta_params = fit_beta_to_samples(lchd_scores, analysis_dir_path)
+        beta_plot_x = np.arange(0, ax.get_xlim()[1] + 0.01, 0.01)
+        beta_plot_y = beta_dist.pdf(beta_plot_x, *beta_params)
+        ax.plot(
+            beta_plot_x, beta_plot_y * hist_max_y / np.max(beta_plot_y),
+            alpha=0.5, color="grey"
+        )
+
+    plot_y_ticks = np.arange(0, hist_max_y * 1.5, 5000)
+    ax.set_yticks(plot_y_ticks)
+    ax.set_ylim(0, ax.get_ylim()[1])
+
+    fig.set_size_inches(88 * MM_TO_INCH, 88 * MM_TO_INCH)
+    fig.savefig(analysis_dir_path / "distribution.svg", dpi=300)
+
+
 def main():
 
     print(f"Opening directory: \"{DATA_SOURCE_NAME}\" at \"{DATA_SOURCE_DIR}\"")
@@ -233,63 +304,9 @@ def main():
 
     # Plotting
     lchd_scores = list(map(lambda x: x[2], data))
+
     print("Starting to plot...")
-
-    plt.rcParams["font.size"] = 7
-    plt.rcParams["font.family"] = "Arial"
-    plt.rcParams["figure.subplot.left"] = 0.2
-    plt.rcParams["figure.subplot.bottom"] = 0.15
-
-    fig, ax = plt.subplots()
-
-    # Histogram, boxplot, median text
-    hist_lchd_y, hist_lchd_x = np.histogram(lchd_scores, bins=100, density=True)
-    hist_lchd_x = (hist_lchd_x[1:] + hist_lchd_x[:-1]) / 2
-    hist_max_y = np.max(hist_lchd_y)
-    ax.plot(
-        hist_lchd_x, hist_lchd_y,
-        label="experimental distribution",
-        color="blue"
-    )
-
-    box_dict = ax.boxplot(
-        lchd_scores,
-        positions=[hist_max_y * 1.3, ],
-        widths=[hist_max_y * 0.1, ],
-        vert=False, showfliers=False, manage_ticks=False
-    )
-    box_dict["medians"][0].set_color("blue")
-    median_line_top = box_dict["medians"][0].get_xydata()[1, :]
-
-    ax.text(
-        median_line_top[0], median_line_top[1],
-        f"median:\n{median_line_top[0]:.5f}",
-        ha="center", va="bottom",
-    )
-
-    # Beta distribution fitting, if needed
-    if FIT_BETA:
-
-        print("tsv tables saved! Fitting beta-distribution...")
-        beta_params = fit_beta_to_samples(lchd_scores, analysis_dir_path)
-        beta_plot_x = np.arange(0, 1 + 0.01, 0.01)
-        beta_plot_y = beta_dist.pdf(beta_plot_x, *beta_params)
-        ax.plot(
-            beta_plot_x, beta_plot_y,
-            alpha=0.7, label="fitted $\\beta$-distribution"
-        )
-
-    ax.legend(loc="upper right")
-    ax.set_xlabel("LoCoSD score")
-    ax.set_ylabel("Density")
-
-    # x_ticks = np.arange(0, 1 + 0.2, 0.2)
-    # ax.set_xticks(x_ticks, [f"{x:.0%}" for x in x_ticks])
-    plot_y_ticks = np.arange(0, hist_max_y * 2, hist_max_y * 2 / 10)
-    ax.set_yticks(plot_y_ticks)
-
-    fig.set_size_inches(88 * MM_TO_INCH, 88 * MM_TO_INCH)
-    fig.savefig(analysis_dir_path / "distribution.svg", dpi=300)
+    plot_results(lchd_scores, analysis_dir_path)
 
 
 if __name__ == "__main__":
