@@ -8,14 +8,17 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 
-import tensorflow as tf
+import torch
+import torch.nn as nn
+import torch.nn.functional as tofu
+
 import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.patches import Rectangle
 from scipy.stats import spearmanr
 
-RING_FILE_PATH = Path("../ring-3.0.0/ring/bin/ring")
-PISCES_DIR_PATH = Path("../../../../PycharmProjects/databases/pisces_220222")
+RING_FILE_PATH = Path("../../ring-3.0.0/ring/bin/ring")
+PISCES_DIR_PATH = Path("../../../../PycharmProjects/databases/pisces_241209")
 OUTPUT_PATH = Path("../../workdir/pisces/ring_result")
 PISCES_LOCOHD_FILE_PATH = Path("../../workdir/pisces/run_2023-02-08-12-50-23/locohd_data.pisces")
 
@@ -77,6 +80,30 @@ class EnvironmentPairList:
 
         # two input tensors, one output tensor
         return np.array(t_in1), np.array(t_in2), np.array(self.locohd_values)
+
+
+class SiameseNeuralNet(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+        self.shared1 = nn.Linear(in_features=26, out_features=256)
+        self.shared2 = nn.Linear(in_features=256, out_features=128)
+        self.ff_out1 = nn.Linear(in_features=128, out_features=64)
+        self.ff_out2 = nn.Linear(in_features=64, out_features=1)
+
+    def forward(self, in1, in2):
+
+        vec1 = tofu.gelu(self.shared1(in1))
+        vec1 = tofu.gelu(self.shared2(vec1))
+
+        vec2 = tofu.gelu(self.shared1(in2))
+        vec2 = tofu.gelu(self.shared2(vec2))
+
+        vec_combined = tofu.gelu(self.ff_out1((vec1 - vec2) ** 2))
+        vec_combined = tofu.sigmoid(self.ff_out2(vec_combined))
+
+        return vec_combined[:, 0]
 
 
 def run_ring() -> None:
@@ -228,58 +255,53 @@ def merge_datasets(ring_data: Dict[str, np.ndarray]) -> EnvironmentPairList:
     return merged_data
 
 
-def create_ffnn():
-    """
-    Creates a siamese feedforward neural network model. It should have two inputs and must be symmetric
-    to input swapping, since it will try to mimic a metric.
+def train_network(t_in1: np.ndarray, t_in2: np.ndarray, y_true: np.ndarray) -> SiameseNeuralNet:
 
-    :return: The neural network model.
-    """
+    ff_nn = SiameseNeuralNet()
+    optimizer = torch.optim.Adam(ff_nn.parameters(), lr=0.001)
 
-    # Define layers
+    y_true_mean = np.mean(y_true)
+    y_true_var = np.var(y_true, mean=y_true_mean)
 
-    l_in1 = tf.keras.layers.Input(shape=(26, ))
-    l_in2 = tf.keras.layers.Input(shape=(26, ))
+    for epoch in range(10):
 
-    l_siamese1 = tf.keras.layers.Dense(256, activation="relu")
-    l_siamese2 = tf.keras.layers.Dense(128, activation="relu")
+        n_batches, remainder = divmod(len(t_in1), 128)
+        for batch_idx in range(n_batches):
 
-    l_combiner = tf.keras.layers.Lambda(
-        lambda x: (x[0] - x[1]) ** 2
-    )
+            optimizer.zero_grad()
 
-    l_ff = tf.keras.models.Sequential([
-        tf.keras.layers.Dense(128, activation="relu"),
-        tf.keras.layers.Dense(64, activation="relu"),
-        tf.keras.layers.Dense(1, activation="sigmoid"),
-        tf.keras.layers.Reshape(tuple())
-    ])
+            idx_start = batch_idx * 128
+            idx_end = (batch_idx + 1) * 128
+            predictions = ff_nn(
+                torch.Tensor(t_in1[idx_start:idx_end]),
+                torch.Tensor(t_in2[idx_start:idx_end])
+            )
 
-    # Define tensor paths
+            y_true_tensor = torch.Tensor(y_true[idx_start:idx_end])
+            bce = tofu.binary_cross_entropy(predictions, y_true_tensor)
+            mse = torch.mean((predictions - torch.Tensor(y_true[idx_start:idx_end])) ** 2)
 
-    t_vec1 = l_siamese1(l_in1)
-    t_vec1 = l_siamese2(t_vec1)
+            bce.backward()
+            optimizer.step()
+            print(f"\r{epoch}, {batch_idx / n_batches:.3%} ({bce = :.5f}, {mse = :.5f})", end="")
+        print()
 
-    t_vec2 = l_siamese1(l_in2)
-    t_vec2 = l_siamese2(t_vec2)
+        with torch.no_grad():
 
-    t_combined = l_combiner([t_vec1, t_vec2])
-    t_combined = l_ff(t_combined)
+            predictions = ff_nn(
+                torch.Tensor(t_in1),
+                torch.Tensor(t_in2)
+            ).numpy()
+            mse = np.mean((predictions - y_true) ** 2)
+            r_squared = 1. - mse / y_true_var
+            correlation = spearmanr(predictions, y_true).statistic
 
-    # Define and compile model
+            print(f"Epoch {epoch}, {mse = :.5f}, {r_squared = :.5f}, {correlation = :.5f}")
 
-    ffnn = tf.keras.Model(inputs=(l_in1, l_in2), outputs=t_combined)
-
-    optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
-    bce = tf.keras.losses.BinaryCrossentropy(name="bce")
-    mse = tf.keras.losses.MeanSquaredError(name="mse")
-    mae = tf.keras.losses.MeanAbsoluteError(name="mae")
-    ffnn.compile(optimizer=optimizer, loss=bce, metrics=[mse, mae])
-
-    return ffnn
+    return ff_nn
 
 
-def test_interaction_dependence(feature_vecs: np.ndarray, ffnn: tf.keras.Model):
+def test_interaction_dependence(feature_vecs: np.ndarray, ff_nn: SiameseNeuralNet):
 
     out_matrix = list()
 
@@ -308,7 +330,9 @@ def test_interaction_dependence(feature_vecs: np.ndarray, ffnn: tf.keras.Model):
         t_in2 = np.concatenate(t_in2, axis=0)
         t_in1 = np.repeat(t_in1, len(t_in2), axis=0)  # repeat along batch dim
 
-        prediction = ffnn.predict_on_batch([t_in1, t_in2])
+        with torch.no_grad():
+            prediction = ff_nn(torch.Tensor(t_in1), torch.Tensor(t_in2)).numpy()
+
         matrix_line = np.full(len(INTERACTIONS), fill_value=np.nan, dtype=float)
         matrix_line[interaction_mask] = prediction
         out_matrix.append(matrix_line)
@@ -318,7 +342,7 @@ def test_interaction_dependence(feature_vecs: np.ndarray, ffnn: tf.keras.Model):
     return out_matrix
 
 
-def plot_results(ffnn: tf.keras.models.Model, merged_dataset: EnvironmentPairList):
+def plot_results(ff_nn: SiameseNeuralNet, merged_dataset: EnvironmentPairList):
 
     t_in1, t_in2, y_true = merged_dataset.get_training_data()
 
@@ -329,7 +353,8 @@ def plot_results(ffnn: tf.keras.models.Model, merged_dataset: EnvironmentPairLis
         "figure.subplot.bottom": 0.15
     })
 
-    y_pred = ffnn.predict_on_batch([t_in1, t_in2])
+    with torch.no_grad():
+        y_pred = ff_nn(torch.Tensor(t_in1), torch.Tensor(t_in2)).numpy()
 
     # Save the true and predicted values
 
@@ -427,7 +452,7 @@ def plot_results(ffnn: tf.keras.models.Model, merged_dataset: EnvironmentPairLis
     fig.suptitle("Expected LoCoHD value between interaction-less\nand single interaction environments")
 
     all_inputs = np.concatenate([t_in1, t_in2], axis=0)
-    interaction_dependence_mx = test_interaction_dependence(all_inputs, ffnn)
+    interaction_dependence_mx = test_interaction_dependence(all_inputs, ff_nn)
 
     ax.imshow(interaction_dependence_mx, cmap="autumn")
     ax.set_xticks(np.arange(len(INTERACTIONS)), labels=INTERACTIONS, rotation=90)
@@ -452,14 +477,8 @@ def main():
     ring_data = get_ring_data()
     merged_dataset = merge_datasets(ring_data)
     t_in1, t_in2, y_true = merged_dataset.get_training_data()
-
-    # np.random.shuffle(y_true)
-
-    ffnn = create_ffnn()
-    ffnn.summary()
-    ffnn.fit(x=[t_in1, t_in2], y=y_true, batch_size=64, epochs=3, validation_split=0.2)
-
-    plot_results(ffnn, merged_dataset)
+    ff_nn = train_network(t_in1, t_in2, y_true)
+    plot_results(ff_nn, merged_dataset)
 
 
 if __name__ == "__main__":
