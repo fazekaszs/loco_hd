@@ -28,9 +28,16 @@ ASSIGNER_CONFIG_PATH = Path("../primitive_typings/coarse_grained_with_centroid.c
 PISCES_DIR_PATH = Path("../../../PycharmProjects/databases/pisces_241209")
 RANDOM_SEED = 1994
 MAX_N_OF_ANCHORS = 1500
-WEIGHT_FUNCTION = ("uniform", [3, 10])
+RANDOMIZE_STRUCTURE = True
+WEIGHT_FUNCTION = ("kumaraswamy", [3, 10, 3, 6])
 TAG_PAIRING_RULE = TagPairingRule({"accept_same": False})
 STATISTICAL_DISTANCE = StatisticalDistance("Kullback-Leibler", [1E-10, ])
+PRIMITIVE_TYPE_WEIGHTS = {
+     "Cent": 1 / 30.61875, "Sulf": 1 / 1.06906, "Ali": 1 / 19.46292,
+     "Neg": 1 / 3.85449, "AmideC": 1 / 33.10329, "Aro": 1 / 3.88015,
+     "Pos": 1 / 3.31089, "OH": 1 / 4.70044
+}
+USE_PRIMITIVE_TYPE_WEIGHTS = False
 UPPER_CUTOFF = 10
 
 
@@ -38,6 +45,41 @@ def is_anchor_atom(pra_template: PrimitiveAtomTemplate) -> bool:
 
     # return len(pra_template.atom_source.source_atom) == 0
     return pra_template.primitive_type == "Cent"
+
+
+def reshuffle_structure(
+        primitive_structure: List[PrimitiveAtomTemplate],
+        np_rng: np.random.Generator
+) -> None:
+
+    # Reshuffle primitive type assignations
+    assignation = [
+        prat.primitive_type
+        for prat in primitive_structure
+        if prat.primitive_type != "Cent"
+    ]
+    np_rng.shuffle(assignation)
+
+    for prat in primitive_structure:
+
+        if prat.primitive_type == "Cent":
+            continue
+
+        prat.primitive_type = assignation.pop()
+
+    # Reshuffle coordinates
+    coordinates = np.array([prat.coordinates for prat in primitive_structure])
+    coordinates_old_mean = np.mean(coordinates, axis=0)
+    coordinates_old_std = np.std(coordinates, axis=0, mean=coordinates_old_mean)
+
+    coordinates += np_rng.uniform(0, 10., size=coordinates.shape)
+    coordinates_new_mean = np.mean(coordinates, axis=0)
+    coordinates_new_std = np.std(coordinates, axis=0, mean=coordinates_new_mean)
+
+    coordinates = (coordinates - coordinates_new_mean) / coordinates_new_std
+    coordinates = coordinates_old_std * coordinates + coordinates_old_mean
+    for prat, c in zip(primitive_structure, coordinates):
+        prat.coordinates = c
 
 
 def get_anchors_and_primitive_atoms(pra_templates: List[PrimitiveAtomTemplate],
@@ -60,6 +102,13 @@ def get_anchors_and_primitive_atoms(pra_templates: List[PrimitiveAtomTemplate],
 
 def main():
 
+    # Create random number generators for different purposes.
+    # Necessary for backwards compatibility, since without these,
+    #   each new random-function-call-type modification in the codebase
+    #   would create different shuffles than those of the previous script runs.
+    rng_pdb_sampler = random.Random(RANDOM_SEED)
+    rng_structure_shuffler = np.random.default_rng(RANDOM_SEED)
+
     # Create working directory
     workdir_path = WORKDIR_TARGET / f"run_{CURRENT_TIME}"
     if os.path.exists(workdir_path):
@@ -81,18 +130,24 @@ def main():
     # Initialize the assigner and locohd
     primitive_assigner = PrimitiveAssigner(ASSIGNER_CONFIG_PATH)
     weight_function = WeightFunction(*WEIGHT_FUNCTION)
+
+    if USE_PRIMITIVE_TYPE_WEIGHTS:
+        category_weights = [PRIMITIVE_TYPE_WEIGHTS[t] for t in primitive_assigner.all_primitive_types]
+    else:
+        category_weights = None
+
     lchd = LoCoHD(
         categories=primitive_assigner.all_primitive_types,
         w_func=weight_function,
         tag_pairing_rule=TAG_PAIRING_RULE,
-        statistical_distance=STATISTICAL_DISTANCE
+        statistical_distance=STATISTICAL_DISTANCE,
+        category_weights=category_weights
     )
 
     # Collect the PDB file names
     pdb_files: List[str] = os.listdir(PISCES_DIR_PATH)
     pdb_files = list(filter(lambda x: x.endswith(".pdb"), pdb_files))
-    random.seed(RANDOM_SEED)
-    random.shuffle(pdb_files)
+    rng_pdb_sampler.shuffle(pdb_files)
 
     time_per_anchor_list = list()
     len_list = list()
@@ -112,14 +167,18 @@ def main():
         pra_templates1 = primitive_assigner.assign_primitive_structure(protein1)
         pra_templates2 = primitive_assigner.assign_primitive_structure(protein2)
 
+        if RANDOMIZE_STRUCTURE:
+            reshuffle_structure(pra_templates1, rng_structure_shuffler)
+            reshuffle_structure(pra_templates2, rng_structure_shuffler)
+
         anchors1, primitive_atoms1 = get_anchors_and_primitive_atoms(pra_templates1, protein1)
         anchors2, primitive_atoms2 = get_anchors_and_primitive_atoms(pra_templates2, protein2)
 
         # Pair anchor indices randomly together.
         if len(anchors1) < len(anchors2):
-            anchors2 = random.sample(anchors2, len(anchors1))
+            anchors2 = rng_pdb_sampler.sample(anchors2, len(anchors1))
         else:
-            anchors1 = random.sample(anchors1, len(anchors2))
+            anchors1 = rng_pdb_sampler.sample(anchors1, len(anchors2))
 
         anchor_pairs = [(x, y) for x, y in zip(anchors1, anchors2)]
 
@@ -131,7 +190,7 @@ def main():
         # Start LoCoHD calculations.
         lchd_scores = lchd.from_primitives(primitive_atoms1, primitive_atoms2, anchor_pairs, UPPER_CUTOFF)
 
-        print(f"Calculation #{pdb_idx + 1} OK! Avg. LoCoHD: {np.mean(lchd_scores):.2%}")
+        print(f"Calculation #{pdb_idx + 1} OK! Avg. score: {np.mean(lchd_scores):.5f}")
 
         pdb_id1 = pdb_files[pdb_idx].replace(".pdb", "")
         pdb_id2 = pdb_files[pdb_idx + 1].replace(".pdb", "")
