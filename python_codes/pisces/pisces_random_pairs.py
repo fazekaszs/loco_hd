@@ -28,10 +28,10 @@ ASSIGNER_CONFIG_PATH = Path("../primitive_typings/coarse_grained_with_centroid.c
 PISCES_DIR_PATH = Path("../../../PycharmProjects/databases/pisces_241209")
 RANDOM_SEED = 1994
 MAX_N_OF_ANCHORS = 1500
-RANDOMIZE_STRUCTURE = True
-WEIGHT_FUNCTION = ("kumaraswamy", [3, 10, 3, 6])
+STRUCTURE_RANDOMIZATION_LEVEL = 2
+WEIGHT_FUNCTION = ("uniform", [3, 10, ])
 TAG_PAIRING_RULE = TagPairingRule({"accept_same": False})
-STATISTICAL_DISTANCE = StatisticalDistance("Kullback-Leibler", [1E-10, ])
+STATISTICAL_DISTANCE = StatisticalDistance("Hellinger", [2., ])
 PRIMITIVE_TYPE_WEIGHTS = {
      "Cent": 1 / 30.61875, "Sulf": 1 / 1.06906, "Ali": 1 / 19.46292,
      "Neg": 1 / 3.85449, "AmideC": 1 / 33.10329, "Aro": 1 / 3.88015,
@@ -47,7 +47,7 @@ def is_anchor_atom(pra_template: PrimitiveAtomTemplate) -> bool:
     return pra_template.primitive_type == "Cent"
 
 
-def reshuffle_structure(
+def soft_reshuffle_structure(
         primitive_structure: List[PrimitiveAtomTemplate],
         np_rng: np.random.Generator
 ) -> None:
@@ -80,6 +80,19 @@ def reshuffle_structure(
     coordinates = coordinates_old_std * coordinates + coordinates_old_mean
     for prat, c in zip(primitive_structure, coordinates):
         prat.coordinates = c
+
+
+def hard_reshuffle_structure(
+        primitive_structure: List[PrimitiveAtomTemplate],
+        np_rng: np.random.Generator
+) -> None:
+
+    coordinates = np.array([prat.coordinates for prat in primitive_structure])
+    min_coordinates = np.min(coordinates, axis=0)
+    max_coordinates = np.max(coordinates, axis=0)
+
+    for prat in primitive_structure:
+        prat.coordinates = (max_coordinates - min_coordinates) * np_rng.uniform(0, 1, size=3) + min_coordinates
 
 
 def get_anchors_and_primitive_atoms(pra_templates: List[PrimitiveAtomTemplate],
@@ -167,9 +180,16 @@ def main():
         pra_templates1 = primitive_assigner.assign_primitive_structure(protein1)
         pra_templates2 = primitive_assigner.assign_primitive_structure(protein2)
 
-        if RANDOMIZE_STRUCTURE:
-            reshuffle_structure(pra_templates1, rng_structure_shuffler)
-            reshuffle_structure(pra_templates2, rng_structure_shuffler)
+        if STRUCTURE_RANDOMIZATION_LEVEL == 0:
+            pass
+        elif STRUCTURE_RANDOMIZATION_LEVEL == 1:
+            soft_reshuffle_structure(pra_templates1, rng_structure_shuffler)
+            soft_reshuffle_structure(pra_templates2, rng_structure_shuffler)
+        elif STRUCTURE_RANDOMIZATION_LEVEL == 2:
+            hard_reshuffle_structure(pra_templates1, rng_structure_shuffler)
+            hard_reshuffle_structure(pra_templates2, rng_structure_shuffler)
+        else:
+            raise Exception("Invalid structure randomization level!")
 
         anchors1, primitive_atoms1 = get_anchors_and_primitive_atoms(pra_templates1, protein1)
         anchors2, primitive_atoms2 = get_anchors_and_primitive_atoms(pra_templates2, protein2)
